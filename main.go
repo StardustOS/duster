@@ -11,7 +11,8 @@ func main() {
 	control.Init()
 	fmt.Println("Pausing")
 	control.Pause(24)
-	time.Sleep(time.Second * 60)
+	fmt.Println("The word size is %d\n", control.WordSize(24))
+	time.Sleep(time.Second * 3)
 	fmt.Println("Unpausing")
 	control.UnPause(24)
 

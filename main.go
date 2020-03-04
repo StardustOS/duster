@@ -18,12 +18,12 @@ func main() {
 	defer mem.Close()
 	fmt.Println("Pausing")
 	control.Pause(domainid)
-	//control.SetDebug(domainid, true)
-	//	r := control.GetRegisterContext(domainid, 0)
+	control.SetDebug(domainid, true)
+	r := control.GetRegisterContext(domainid, 0)
 	// fmt.Println("The word size is ", control.WordSize(domainid))
 	// fmt.Println(r.Rflags)
 
-	mem.Map(884816, domainid, 4096, 0)
+	mem.Map(884816, domainid, 1, 0)
 	buffer := mem.Read(884816, 4096)
 	if buffer != nil {
 		fmt.Println(buffer[80:89])

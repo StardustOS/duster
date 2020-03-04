@@ -13,13 +13,11 @@ void* map_memory(xenforeignmemory_handle*fmem, xc_interface* xch, uint32_t domid
 	const size_t num_pages = (num_bytes + XC_PAGE_SIZE - 1) >> XC_PAGE_SHIFT;
 	xen_pfn_t*pages= (xen_pfn_t*) malloc(num_pages* sizeof(xen_pfn_t));
 	int* errors = (int*) malloc(num_pages* sizeof(int));
-	printf("Addrewss before: %lu\n", vaddr);
 	const xen_pfn_t base_gfn = xc_translate_foreign_address(xch, domid, vcpu, vaddr);
 	printf("Addresses after: %lu\n", base_gfn);
 	for (size_t i = 0;i < num_pages; ++i)
 		pages[i] = base_gfn + i;
 	void* mem = xenforeignmemory_map(fmem, domid, perm, num_pages, pages, errors);
-	printf("THe pages value: %lu\n", pages[0]);
 	if (!mem) {
 		puts("NO MEMORY MAPPED!!!");
 	}

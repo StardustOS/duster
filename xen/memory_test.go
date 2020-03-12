@@ -1,7 +1,13 @@
 package xen
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"os/exec"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 	"unsafe"
 )
@@ -9,6 +15,31 @@ import (
 const (
 	startingAddress = 5034
 )
+
+func testSetup() int {
+	cmd := exec.Command("./start.sh")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Run()
+	output := out.String()
+	rows := strings.Split(output, "\n")
+	for _, row := range rows {
+		if strings.Contains(row, "stardust") {
+			values := strings.Fields(row)
+			id := values[1]
+			num, _ := strconv.Atoi(id)
+			return num
+		}
+	}
+	return 0
+}
+
+func testTeardown() {
+	cmd := exec.Command("xl", "destroy", "stardust")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Run()
+}
 
 func CreateDummyBuffer() unsafe.Pointer {
 	buffer := make([]byte, 4096)
@@ -23,12 +54,15 @@ func TestCreatePage(t *testing.T) {
 		return
 	}
 	start, end := page.Range()
-	if start != startingAddress {
-		t.Errorf("Error: starting address should be %d not %d", startingAddress, start)
+	expectedStart := uint64(startingAddress - (startingAddress % 4096))
+	expectedEnd := uint64(expectedStart + 4096)
+	fmt.Printf("Expected %d\n", expectedEnd)
+	if start != expectedStart {
+		t.Errorf("Error: starting address should be %d not %d", expectedStart, start)
 	}
 
-	if end != startingAddress+4096 {
-		t.Errorf("Error: ending address should be %d not %d", startingAddress+4096, end)
+	if end != expectedEnd {
+		t.Errorf("Error: ending address should be %d not %d", expectedEnd, end)
 	}
 }
 
@@ -93,4 +127,121 @@ func TestReadWriteError(t *testing.T) {
 
 		})
 	}
+}
+
+func TestInitWorks(t *testing.T) {
+	testSetup()
+	memory := Memory{}
+	err := memory.Init(nil)
+	if err != nil {
+		t.Error(err)
+	}
+	testTeardown()
+}
+
+func TestMapMemory(t *testing.T) {
+	id := uint32(testSetup())
+	memory := &Memory{}
+	domain := &Xenctrl{}
+	err := memory.Init(domain)
+	if err != nil {
+		t.Error(err)
+	}
+	err = domain.Init()
+	if err != nil {
+		t.Error(err)
+	}
+	err = memory.Map(1900632, id, 8, 0)
+	if err != nil {
+		t.Error("Error with mapping", err)
+	}
+	err = memory.UnMap(1900632)
+	if err != nil {
+		t.Errorf("Error with unmapping %s", err)
+	}
+	testTeardown()
+}
+
+func TestReadMemory(t *testing.T) {
+	id := uint32(testSetup())
+	memory := &Memory{}
+	domain := &Xenctrl{}
+
+	err := memory.Init(domain)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = domain.Init()
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = memory.Map(884816, id, 8, 0)
+	if err != nil {
+		t.Error("Error with mapping", err)
+	}
+	bytes, err := memory.Read(884816, 8)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	fmt.Println(bytes)
+	data := binary.LittleEndian.Uint64(bytes)
+	fmt.Println(data)
+	if data != 131072 {
+		t.Error("Read the wrong value from memory")
+	}
+
+	err = memory.UnMap(884816)
+	if err != nil {
+		t.Errorf("Error with unmapping %s", err)
+	}
+	testTeardown()
+}
+
+func TestReadWriteMemory(t *testing.T) {
+	id := uint32(testSetup())
+	memory := &Memory{}
+	domain := &Xenctrl{}
+
+	err := memory.Init(domain)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = domain.Init()
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = memory.Map(884848, id, 8, 0)
+	if err != nil {
+		t.Error("Error with mapping", err)
+	}
+	bs := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bs, 884848)
+	err = memory.Write(884848, 8, bs)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	bytes, err := memory.Read(884848, 8)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	data := binary.LittleEndian.Uint64(bytes)
+
+	fmt.Println(data)
+	if data != 884848 {
+		t.Error("Read the wrong value from memory")
+	}
+
+	err = memory.UnMap(884848)
+	if err != nil {
+		t.Errorf("Error with unmapping %s", err)
+	}
+	testTeardown()
 }

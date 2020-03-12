@@ -29,25 +29,34 @@ void* map_memory(xenforeignmemory_handle*fmem, xc_interface* xch, uint32_t domid
 	}
 	return mem;
 }
+
+int unmap(xenforeignmemory_handle* fmem, void* address, unsigned long pages) {
+	return xenforeignmemory_unmap(fmem, address, pages);
+}
 void write_memory(void* map, void* buffer, int offset, int length) {
+	//char* b = (char*)map;
 	memcpy((map + offset), buffer, length);
 }
+
 */
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"unsafe"
 )
 
 //PageError type representing error codes
 type PageError int
+type MemoryError int
 
 const (
-	OffsetTooLarge          PageError = 0
-	NotEnoughBytes          PageError = 1
-	SizeTooLarge            PageError = 2
-	MismatchingNoBytesWrite PageError = 3
+	OffsetTooLarge          PageError   = 0
+	NotEnoughBytes          PageError   = 1
+	SizeTooLarge            PageError   = 2
+	MismatchingNoBytesWrite PageError   = 3
+	CouldNotGetMemoryHandle MemoryError = 0
 )
 
 func (err PageError) Error() string {
@@ -62,6 +71,14 @@ func (err PageError) Error() string {
 		return "Mismatching number of bytes in Write (i.e. the byte slice has more or less than what the size var say)"
 	}
 	return "Unknown error"
+}
+
+func (err MemoryError) Error() string {
+	switch err {
+	case CouldNotGetMemoryHandle:
+		return "Error: could not get memory handle. Please try running as sudo and make sure the domain is correct"
+	}
+	return ""
 }
 
 func validateOffsetAndSize(offset, size, pageSize uint16) error {
@@ -91,14 +108,15 @@ func (page *Page) Range() (uint64, uint64) {
 
 //Read returns a byte array containing the data stored at the page
 //offset is the offset we start reading at (i.e. set to zero if we want to read from the beginning)
-//size the amont of data to be read
+//size the amount of data to be read
 func (page *Page) Read(offset, size uint16) ([]byte, error) {
 	err := validateOffsetAndSize(offset, size, page.pageSize)
 	if err != nil {
 		return nil, err
 	}
-
+	fmt.Println("offset", offset)
 	buffer := C.GoBytes(page.memory, C.int(page.pageSize))
+	fmt.Println("Length of offset", offset+size)
 	return buffer[offset:(offset + size)], nil
 }
 
@@ -111,6 +129,7 @@ func (page *Page) Write(offset, size uint16, bytes []byte) error {
 	if len(bytes) != int(size) {
 		return MismatchingNoBytesWrite
 	}
+	fmt.Println("Offset before write", offset)
 	C.write_memory(page.memory, C.CBytes(bytes), C.int(offset), C.int(size))
 	return nil
 }
@@ -125,62 +144,177 @@ func (page *Page) CalculateOffset(address uint64) uint16 {
 func CreatePage(address uint64, memory unsafe.Pointer) *Page {
 	page := new(Page)
 	page.pageSize = uint16(C.XC_PAGE_SIZE)
-	page.start = address
-	page.end = address + uint64(page.pageSize)
+	page.start = address - uint64(page.CalculateOffset(address))
+	page.end = page.start + uint64(page.pageSize)
 	page.memory = memory
 	return page
 }
 
-type Memory struct {
-	key      *C.xenforeignmemory_handle
-	ctrl     *Xenctrl
-	memories map[uint64]unsafe.Pointer
+type Map struct {
+	memories []*Page
+	pointer  unsafe.Pointer
 }
 
+func (mappedMemory *Map) AddPointer(pointer unsafe.Pointer, size uint32, address uint64) {
+	mappedMemory.pointer = pointer
+	page := CreatePage(address, pointer)
+	mappedMemory.memories = append(mappedMemory.memories, page)
+}
+
+func (mappedMemory *Map) NoPages() uint64 {
+	return uint64(len(mappedMemory.memories))
+}
+
+func (mappedMemory *Map) Destroy() unsafe.Pointer {
+	mappedMemory.memories = nil
+	pointer := mappedMemory.pointer
+	return pointer
+}
+
+func (mappedMemory *Map) findPage(address uint64) (*Page, error) {
+	for _, page := range mappedMemory.memories {
+		lower, upper := page.Range()
+		if lower <= address && upper >= address {
+			return page, nil
+		}
+	}
+	return nil, errors.New("NOT FOUND")
+}
+
+func (mappedMemory *Map) Read(address uint64, size uint16) (bytes []byte, err error) {
+	page, err := mappedMemory.findPage(address)
+	if err != nil {
+		return nil, err
+	}
+	bytes, err = page.Read(page.CalculateOffset(address), size)
+	return
+}
+
+func (mappedMemory *Map) Write(address uint64, bytes []byte, size uint16) error {
+	page, err := mappedMemory.findPage(address)
+	if err != nil {
+		return err
+	}
+	err = page.Write(page.CalculateOffset(address), size, bytes)
+	return err
+}
+
+func (mappedMemory *Map) StartingAddress() (address uint64) {
+	if mappedMemory.memories != nil {
+		address, _ = mappedMemory.memories[0].Range()
+	}
+	return
+}
+
+func (mappedMemory *Map) EndingAddress() (address uint64) {
+	if mappedMemory.memories != nil {
+		_, address = mappedMemory.memories[len(mappedMemory.memories)-1].Range()
+	}
+	return
+}
+
+func (mappedMemory *Map) IsInMap(address uint64) bool {
+	startAddress := mappedMemory.StartingAddress()
+	endAddress := mappedMemory.EndingAddress()
+	fmt.Printf("Start address: %d and end address: %d (address: %d)\n", startAddress, endAddress, address)
+	return startAddress <= address && endAddress >= address
+
+}
+
+//Memory is used for interacting with the memory
+//of the virtual machine
+type Memory struct {
+	key  *C.xenforeignmemory_handle
+	ctrl *Xenctrl
+	maps []Map
+}
+
+//Init must be called first gets handles for accessing memories
 func (mem *Memory) Init(ctrl *Xenctrl) error {
 	mem.key = C.xenforeignmemory_open(nil, 0)
+	if mem.key == nil {
+		return CouldNotGetMemoryHandle
+	}
 	mem.ctrl = ctrl
 	return nil
 }
 
+//Close called when operation are done. None of the
+//methods, except Init, will work
 func (mem *Memory) Close() error {
 	C.xenforeignmemory_close(mem.key)
 	return nil
 }
 
+//Map - maps an area of memory that allows use to read from it
 func (mem *Memory) Map(address uint64, domid uint32, size uint32, vcpu uint32) error {
-	if mem.memories == nil {
-		mem.memories = make(map[uint64]unsafe.Pointer)
-	}
-	memory := C.map_memory(mem.key, mem.ctrl.Key(), C.uint32_t(domid), C.int(vcpu), C.ulong(address), C.ulong(size), C.PROT_READ)
+	memory := C.map_memory(mem.key, mem.ctrl.Key(), C.uint32_t(domid), C.int(vcpu), C.ulong(address), C.ulong(size), C.PROT_READ|C.PROT_WRITE)
 	if memory == nil {
 		fmt.Println("SOMETHING WENT WRONG")
 	}
-	mem.memories[address] = memory
+	newMap := Map{}
+	newMap.AddPointer(memory, size, address)
+
+	startNewMap := newMap.StartingAddress()
+	for index, currMap := range mem.maps {
+		start := currMap.StartingAddress()
+		if startNewMap < start {
+			mem.maps = append(mem.maps[:index], append([]Map{newMap}, mem.maps[index:]...)...)
+			return nil
+		}
+	}
+	mem.maps = append(mem.maps, newMap)
+	fmt.Println(mem.maps)
 	return nil
 }
 
-func (mem *Memory) Read(address uint64, size uint32) []byte {
-	if mem.memories == nil {
-		return nil
+func (mem *Memory) getMap(address uint64) (Map, int) {
+	for index, current := range mem.maps {
+		if current.IsInMap(address) {
+			return current, index
+		}
 	}
-	if val, ok := mem.memories[address]; ok {
-		buffer := C.GoBytes(val, C.int(size))
-		return buffer
-	}
-	return nil
+	return Map{}, -1
 }
 
-func (mem *Memory) Write(address uint64, bytes []byte) error {
-	if v, ok := mem.memories[address]; ok {
-		fmt.Println(v)
-		//C.write_memory(v, bytes, C.int(len(bytes)))
+func (mem *Memory) Read(address uint64, size uint32) ([]byte, error) {
+	mapToRead, index := mem.getMap(address)
+	if index == -1 {
+		return nil, nil
 	}
-	return nil
+	fmt.Println("size", size)
+	bytes, err := mapToRead.Read(address, uint16(size))
+	if err != nil {
+		return nil, err
+	}
+	return bytes, nil
 }
 
-func (mem *Memory) UnMap(address uint64, pages uint32) error {
-	err := C.xenforeignmemory_unmap(mem.key, mem.memories[address], 1)
-	fmt.Println("Error in unmap", err)
+func (mem *Memory) Write(address uint64, size uint32, bytes []byte) error {
+	mapToWrite, index := mem.getMap(address)
+	if index == -1 {
+		return errors.New("Not found")
+	}
+	//FIX THIS
+	err := mapToWrite.Write(address, bytes, uint16(size))
+	return err
+}
+
+//UnMap - &safe_place_to_write cleans up the memory once it's has been finished being used
+func (mem *Memory) UnMap(address uint64) error {
+	mapToRemove, index := mem.getMap(address)
+	if index == -1 {
+		return errors.New("Not found")
+	}
+	mem.maps = append(mem.maps[:index], mem.maps[index+1:]...)
+
+	noPages := C.ulong(mapToRemove.NoPages())
+	err := C.unmap(mem.key, mapToRemove.Destroy(), noPages) // C.size_t(mapToRemove.NoPages()))
+
+	if err != 0 {
+		fmt.Println(err)
+		return errors.New("Error occured when unmapping")
+	}
+
 	return nil
 }

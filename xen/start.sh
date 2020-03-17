@@ -1,9 +1,7 @@
 #!/bin/bash
-cd ../../stardust-experimental/
-#make
-cd build/
+cd ../../stardust-experimental/build/
 sudo xl create -q ./mini-os.conf
 cp mini-os.gz ../../debugger/
-cd ../../debugger/build/
+cd ../../debugger/
 gunzip mini-os.gz
 sudo xl list

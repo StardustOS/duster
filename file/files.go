@@ -105,7 +105,7 @@ func (f *File) UpdateLine(rip uint64) (changed bool) {
 	// fmt.Println(err)
 	// fmt.Println(entry)
 	if entry == nil {
-		fmt.Println("NIL!")
+		return false
 	}
 	lineReader, _ := f.data.LineReader(entry)
 	// fmt.Println(lineReader)

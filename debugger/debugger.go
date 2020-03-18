@@ -17,12 +17,13 @@ const (
 )
 
 type Debugger struct {
-	domainid    uint32
-	breakpoints map[uint64]byte
-	controller  xen.Xenctrl
-	memory      xen.Memory
-	call        xen.XenCall
-	fileHandler file.File
+	domainid     uint32
+	breakpoints  map[uint64]byte
+	controller   xen.Xenctrl
+	memory       xen.Memory
+	call         xen.XenCall
+	fileHandler  file.File
+	insinglestep bool
 }
 
 //Init must be run before any of the other methods
@@ -59,14 +60,14 @@ func (debugger *Debugger) StartSingle(vcpu uint32, start bool) error {
 	if err != nil {
 		return err
 	}
-	//fmt.Println("val read from registers", val)
 	if start {
 		val |= singleStep
+		debugger.insinglestep = true
 	} else {
 		val &= ^singleStep
-		//	fmt.Println("val written to registers", val)
+		debugger.insinglestep = false
+
 	}
-	//fmt.Println("About to write", val)
 	registers.AddRegister("rflags", val)
 	debugger.controller.SetRegisterContext(registers, debugger.domainid, vcpu)
 	return nil
@@ -97,14 +98,14 @@ func (debugger *Debugger) Check(address uint64) {
 }
 
 func (debugger *Debugger) Step(vcpu uint32) uint64 {
-	registers := debugger.controller.GetRegisterContext(debugger.domainid, 0)
+	registers := debugger.controller.GetRegisterContext(debugger.domainid, vcpu)
 	rip, _ := registers.GetRegister("rip")
 	previousRIP := uint64(0)
 	for !debugger.fileHandler.UpdateLine(rip) {
 		for !debugger.controller.IsPaused(debugger.domainid) {
 		}
 		previousRIP = rip
-		registers := debugger.controller.GetRegisterContext(debugger.domainid, 0)
+		registers := debugger.controller.GetRegisterContext(debugger.domainid, vcpu)
 		rip, _ = registers.GetRegister("rip")
 		if oldByte, ok := debugger.breakpoints[rip]; ok {
 			debugger.memory.Write(rip, 1, []byte{oldByte})
@@ -114,40 +115,26 @@ func (debugger *Debugger) Step(vcpu uint32) uint64 {
 			debugger.memory.Write(previousRIP, 1, []byte{breakInt})
 		}
 		debugger.controller.UnPause(debugger.domainid)
-		//fmt.Println(debugger.fileHandler.GetLineInformation())
 	}
 	if _, ok := debugger.breakpoints[previousRIP]; ok {
 		debugger.memory.Write(previousRIP, 1, []byte{breakInt})
 	}
-	//debugger.controller.UnPause(debugger.domainid)
 	return rip
-	//debugger.controller.UnPause(debugger.domainid)
-	//debugger.controller.Pause(debugger.domainid)
-	//debugger.call.HyperCall(debugger.controller, xen.PauseCPU, debugger.domainid, vcpu)
-	//debugger.StartSingle(vcpu, true)
-	//debugger.call.HyperCall(debugger.controller, xen.UnPauseCPU, debugger.domainid, vcpu)
-	//debugger.controller.UnPause(debugger.domainid)
+}
 
-	// for !debugger.controller.IsPaused(debugger.domainid) {
-	// 	fmt.Println("Wating for pause")
-	// }
-	// err := debugger.StartSingle(vcpu, false)
-
-	// if err != nil {
-	// 	fmt.Println("err", err)
-	// }
-	// reg := debugger.controller.GetRegisterContext(debugger.domainid, vcpu)
-
-	// rip, err := reg.GetRegister("rip")
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
-	// fmt.Println("RIP ", rip)
-	// return rip
+func (debugger *Debugger) Continue(vcpu uint32) error {
+	if debugger.controller.IsPaused(debugger.domainid) {
+		if debugger.insinglestep {
+			debugger.StartSingle(vcpu, false)
+		}
+		return debugger.controller.UnPause(debugger.domainid)
+	}
+	return nil
 }
 
 func (debugger *Debugger) SetBreakpoint(filename string, line int, vcpu uint32) error {
-	fmt.Println("Setting breakpoint")
+	fmt.Println("Filename", filename)
+	fmt.Println("line", line)
 	debugger.controller.Pause(debugger.domainid)
 	address := debugger.fileHandler.GetAddress(filename, line)
 	fmt.Println("address", address)
@@ -165,6 +152,16 @@ func (debugger *Debugger) SetBreakpoint(filename string, line int, vcpu uint32) 
 	debugger.controller.UnPause(debugger.domainid)
 	return nil
 }
+
+// func (debugger *Debugger) RemoveBreakpoint(filename string, line int, vcpu uint32) error {
+// 	address := debugger.fileHandler.GetAddress(filename, line)
+// 	if val, ok := debugger.breakpoints[address]; ok {
+// 		delete(debugger.breakpoints, address)
+// 		err := memory.Write(address, 1, []byte{val})
+// 		return err
+// 	}
+// 	return nil
+// }
 
 //Cleanup must be run before the end of the program
 func (debugger *Debugger) Cleanup() {

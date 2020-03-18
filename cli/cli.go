@@ -30,6 +30,8 @@ func (cli *CLI) Init(domaind uint32, filename string) error {
 	cli.suggestions = []prompt.Suggest{
 		prompt.Suggest{Text: "break", Description: "Sets a break point at in a file (argument in the form of file.c:<line no>"},
 		prompt.Suggest{Text: "step", Description: "Steps forward one line (note a breakpoint must be set before hand)"},
+		prompt.Suggest{Text: "continue", Description: "Continue to the next breakpoint"},
+		prompt.Suggest{Text: "quit", Description: "Exit the debugger"},
 	}
 	cli.dbg = debugger.Debugger{}
 	err := cli.dbg.Init(domaind, filename)
@@ -79,5 +81,10 @@ func (cli *CLI) ProcessInput(input string) {
 		}
 	case "quit":
 		os.Exit(0)
+	case "continue":
+		err := cli.dbg.Continue(0)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }

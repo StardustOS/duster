@@ -45,7 +45,7 @@ func (f *File) Init() error {
 	f.informationFile = make(map[string]info)
 
 	file, err := elf.Open(f.Name)
-	defer file.Close()
+	//defer file.Close()
 
 	if err != nil {
 		return err
@@ -75,9 +75,6 @@ func (f *File) Init() error {
 			filename := lineEntry.File.Name
 			path := strings.Split(filename, "/")
 			name := path[len(path)-1]
-			if strings.Compare(name, "startup.c") == 0 {
-				fmt.Printf("%+v\n", lineEntry)
-			}
 			i, _ := f.informationFile[name]
 			i.addLineInformation(lineEntry)
 			f.informationFile[name] = i
@@ -119,4 +116,16 @@ func (f *File) UpdateLine(rip uint64) (changed bool) {
 		f.currentFile = lineEntry.File.Name
 	}
 	return
+}
+
+func (f *File) Tag() {
+	reader := f.data.Reader()
+
+	for e, err := reader.Next(); e != nil; e, err = reader.Next() {
+		if e == nil && err == nil {
+			fmt.Println("End of section")
+		} else {
+			fmt.Printf("%+v\n", e)
+		}
+	}
 }

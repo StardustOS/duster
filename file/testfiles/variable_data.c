@@ -1,6 +1,7 @@
 #include <stdio.h>
 
-// int y;
+int y;
+const char* string = "my string";
 
 // struct k {
 //     int v;
@@ -8,14 +9,16 @@
 //     float f;
 // };
 
-// int clean(int val1, int val2) {
-//     int a = val1 + val2 + y;
-//     struct k l;
-//     l.v = 1;
-//     printf("%d\n", a);
-//     int y = 20;
-//     printf("%d\n", y);
-// }
+int clean(int val1, int val2) {
+    int a = val1 + val2 + y;
+    printf("%d\n", a);
+    int y = 20;
+    printf("%d\n", y);
+}
+
+int meh(void) {
+    return 0;
+}
 
 int main(void) {
     int a = 0;
@@ -26,6 +29,7 @@ int main(void) {
             if (i % 2 == 0) {
                 puts("FINE");
                 a = 1;
+                clean(i, a);
             } else {
                 puts("NOT FINE");
             }

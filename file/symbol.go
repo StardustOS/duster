@@ -2,6 +2,7 @@ package file
 
 import (
 	"debug/dwarf"
+	"fmt"
 )
 
 type SymbolError int
@@ -34,7 +35,7 @@ type SymbolTable struct {
 }
 
 func (sym *SymbolTable) PCInStack(pc uint64) bool {
-	return pc >= sym.LowerPC && pc <= sym.UpperPC
+	return pc >= sym.LowerPC && pc < sym.UpperPC
 }
 
 func (sym *SymbolTable) AddChild(table *SymbolTable) {
@@ -44,7 +45,9 @@ func (sym *SymbolTable) AddChild(table *SymbolTable) {
 func (sym *SymbolTable) GetNextTable(pc uint64) *SymbolTable {
 	for _, child := range sym.children {
 		if child.PCInStack(pc) {
-			return child
+			c := child.GetNextTable(pc)
+			fmt.Printf("%+v\n", c)
+			return c
 		}
 	}
 	return sym
@@ -139,24 +142,15 @@ func (sym *Symbol) parse(cu *dwarf.Entry) error {
 
 			parent := sym.table.Parent()
 			if parent == nil {
-				// fmt.Println(entry)
 				parent = sym.table
 			}
 			parent.AddChild(newTable)
 			newTable.AddParent(parent)
 			sym.table = newTable
 
-			// if parent := sym.table.Parent(); parent != nil {
-			// 	parent.AddChild(newTable)
-			// 	newTable.AddParent(parent)
-			// } else {
-			// 	parent = sym.table
-			// 	parent.AddChild(newTable)
-			// 	// newTable.AddParent(parent)
-			// }
-
 		case dwarf.TagLexDwarfBlock:
 			lowPC, highPC, err := parsePC(entry)
+			fmt.Printf("Lexical block: %+v\n", entry)
 			if err != nil {
 				return err
 			}
@@ -184,21 +178,16 @@ func (sym *Symbol) parse(cu *dwarf.Entry) error {
 	return nil
 }
 
-func (sym *Symbol) Update(pc uint64) error {
+func (sym *Symbol) GetSymbol(pc uint64, name string) (Variable, error) {
 	reader := sym.Data.Reader()
 	compileUnit, err := reader.SeekPC(pc)
 	if err != nil {
-		return err
+		return Variable{}, err
 	}
 	err = sym.parse(compileUnit)
 	if err != nil {
-		return err
+		return Variable{}, err
 	}
 	current := sym.table.GetNextTable(pc)
-	sym.table = current
-	return nil
-}
-
-func (sym *Symbol) GetSymbol(name string) (Variable, error) {
-	return sym.table.Lookup(name)
+	return current.Lookup(name)
 }

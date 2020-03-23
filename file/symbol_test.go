@@ -12,8 +12,10 @@ type pcPos struct {
 }
 
 type test struct {
-	Filename  string
-	Positions []pcPos
+	Filename      string
+	Positions     []pcPos
+	ExpectedError bool
+	Err           error
 }
 
 var positions = []test{
@@ -43,9 +45,52 @@ var positions = []test{
 			},
 		},
 	},
+	test{
+		Filename: "testfiles/different-scopes",
+		Positions: []pcPos{
+			pcPos{
+				PC: 0x635,
+				Variables: []Variable{
+					Variable{Name: "j"},
+				},
+			},
+		},
+		ExpectedError: true,
+		Err:           SymbolNotFound,
+	},
+	test{
+		Filename: "testfiles/different-scopes",
+		Positions: []pcPos{
+			pcPos{
+				PC: 0x60e,
+				Variables: []Variable{
+					Variable{Name: "k"},
+					Variable{Name: "i"},
+					Variable{Name: "factor"},
+				},
+			},
+			pcPos{
+				PC: 0x628,
+				Variables: []Variable{
+					Variable{Name: "k"},
+					Variable{Name: "i"},
+					Variable{Name: "factor"},
+					Variable{Name: "j"},
+				},
+			},
+			pcPos{
+				PC: 0x635,
+				Variables: []Variable{
+					Variable{Name: "k"},
+					Variable{Name: "i"},
+					Variable{Name: "factor"},
+				},
+			},
+		},
+	},
 }
 
-func TestUpdateSymbolSimple(t *testing.T) {
+func TestGetSymbol(t *testing.T) {
 	for _, test := range positions {
 		file, err := elf.Open(test.Filename)
 		if err != nil {
@@ -59,16 +104,17 @@ func TestUpdateSymbolSimple(t *testing.T) {
 			name := fmt.Sprintf("%s:%d", test.Filename, pos.PC)
 			t.Run(name, func(t *testing.T) {
 				sym := Symbol{Data: d}
-				err = sym.Update(pos.PC)
-				if err != nil {
-					t.Error(err)
-				}
 				for _, expected := range pos.Variables {
-					variable, err := sym.GetSymbol(expected.Name)
-					if err != nil {
+					variable, err := sym.GetSymbol(pos.PC, expected.Name)
+
+					if err != nil && !test.ExpectedError {
 						t.Error(err)
+					} else if test.ExpectedError {
+						if err != test.Err {
+							t.Errorf("Error: expected to get %s not %s", test.Err, err)
+						}
 					}
-					if variable != expected {
+					if variable != expected && !test.ExpectedError {
 						t.Errorf("Expected %+v but got %+v", expected, variable)
 					}
 				}

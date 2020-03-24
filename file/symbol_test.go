@@ -88,6 +88,37 @@ var positions = []test{
 			},
 		},
 	},
+	test{
+		Filename: "testfiles/variable_data",
+		Positions: []pcPos{
+			pcPos{
+				PC: 0x719,
+				Variables: []Variable{
+					Variable{Name: "clean_a"},
+					Variable{Name: "z"},
+					Variable{Name: "x"},
+				},
+			},
+			pcPos{
+				PC: 0x6b5,
+				Variables: []Variable{
+					Variable{Name: "i"},
+					Variable{Name: "a"},
+				},
+			},
+			pcPos{
+				PC: 0x701,
+				Variables: []Variable{
+					Variable{Name: "clean_a"},
+					Variable{Name: "z"},
+					Variable{Name: "a"},
+					Variable{Name: "meh"},
+				},
+			},
+		},
+		ExpectedError: true,
+		Err:           SymbolNotFound,
+	},
 }
 
 func TestGetSymbol(t *testing.T) {
@@ -123,27 +154,3 @@ func TestGetSymbol(t *testing.T) {
 	}
 
 }
-
-// func TestUpdateSymbols(t *testing.T) {
-// 	file, err := elf.Open("testfiles/variable_data")
-// 	if err != nil {
-// 		t.Error(err)
-// 	}
-// 	d, err := file.DWARF()
-// 	if err != nil {
-// 		t.Error(err)
-// 	}
-// 	sym := Symbol{Data: d}
-// 	err = sym.Update(0x710)
-// 	if err != nil {
-// 		t.Error(err)
-// 	}
-// 	variable, err := sym.GetSymbol("a")
-// 	if err != nil {
-// 		t.Error(err)
-// 	}
-// 	expected := Variable{Name: "a"}
-// 	if variable != expected {
-// 		t.Errorf("Expected %+v but got %+v", expected, variable)
-// 	}
-// }

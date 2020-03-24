@@ -81,7 +81,7 @@ type Symbol struct {
 	pc    uint64
 	Data  *dwarf.Data
 	entry *dwarf.Entry
-	table *SymbolTable
+	root  *SymbolTable
 }
 
 func parsePC(entry *dwarf.Entry) (lower, upper uint64, err error) {
@@ -112,9 +112,9 @@ func (sym *Symbol) parse(cu *dwarf.Entry) error {
 	}
 	reader := sym.Data.Reader()
 	sym.entry = cu
-	sym.table = new(SymbolTable)
-	sym.table.parent = nil
-	var depth int
+	sym.root = new(SymbolTable)
+	current := sym.root
+	sym.root.parent = nil
 	for entry, err := reader.Next(); entry != nil; entry, err = reader.Next() {
 		if err != nil {
 			return err
@@ -127,54 +127,37 @@ func (sym *Symbol) parse(cu *dwarf.Entry) error {
 				if !ok {
 					return InvalidDWARF
 				}
-				sym.table.AddVariable(name)
+				current.AddVariable(name)
 			}
 		case dwarf.TagSubprogram:
 			lowPC, highPC, err := parsePC(entry)
 			if err != nil {
 				return err
 			}
-			for i := depth; i > 0; i-- {
-				sym.table = sym.table.Parent()
-			}
-			depth = 0
+			parent := sym.root
 			newTable := &SymbolTable{LowerPC: lowPC, UpperPC: highPC}
-
-			parent := sym.table.Parent()
-			if parent == nil {
-				parent = sym.table
-			}
 			parent.AddChild(newTable)
 			newTable.AddParent(parent)
-			sym.table = newTable
+			current = newTable
 
 		case dwarf.TagLexDwarfBlock:
 			lowPC, highPC, err := parsePC(entry)
-			fmt.Printf("Lexical block: %+v\n", entry)
 			if err != nil {
 				return err
 			}
 
 			newTable := &SymbolTable{LowerPC: lowPC, UpperPC: highPC}
-			if sym.table.PCInStack(lowPC) {
-				sym.table.AddChild(newTable)
-				newTable.AddParent(sym.table)
+			if current.PCInStack(lowPC) {
+				current.AddChild(newTable)
+				newTable.AddParent(current)
 			} else {
-				parent := sym.table.Parent()
+				parent := current.Parent()
 				parent.AddChild(newTable)
 				newTable.AddParent(parent)
 			}
-			sym.table = newTable
-			depth++
+			current = newTable
 		}
 	}
-	current := sym.table
-	var previous *SymbolTable
-	for current != nil {
-		previous = current
-		current = current.Parent()
-	}
-	sym.table = previous
 	return nil
 }
 
@@ -188,6 +171,6 @@ func (sym *Symbol) GetSymbol(pc uint64, name string) (Variable, error) {
 	if err != nil {
 		return Variable{}, err
 	}
-	current := sym.table.GetNextTable(pc)
+	current := sym.root.GetNextTable(pc)
 	return current.Lookup(name)
 }

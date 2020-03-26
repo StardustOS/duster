@@ -16,17 +16,23 @@ func (e Error) Error() string {
 	return ""
 }
 
+type item struct {
+	signed bool
+	uVal   uint64
+	sVal   int64
+}
+
 type stack struct {
-	stack []uint64
+	stack []item
 }
 
-func (s *stack) push(element uint64) {
-	s.stack = append([]uint64{element}, s.stack...)
+func (s *stack) push(element item) {
+	s.stack = append([]item{element}, s.stack...)
 }
 
-func (s *stack) pop() (uint64, error) {
+func (s *stack) pop() (item, error) {
 	if s.stack == nil {
-		return 0, Empty
+		return item{}, Empty
 	}
 	element := s.stack[0]
 	s.stack = s.stack[1:]
@@ -34,7 +40,9 @@ func (s *stack) pop() (uint64, error) {
 }
 
 type Result struct {
-	Value uint64
+	Signed bool
+	Uvalue uint64
+	Svalue int64
 }
 
 type Parser struct {
@@ -61,5 +69,5 @@ func (p *Parser) Result() (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return Result{result}, nil
+	return Result{result.signed, result.uVal, result.sVal}, nil
 }

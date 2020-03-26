@@ -14,34 +14,50 @@ type exprTests struct {
 var tests = []exprTests{
 	exprTests{
 		Input: bytes.NewBuffer([]byte{byte(DW_OP_lit0)}),
-		Res:   Result{Value: uint64(0)},
+		Res:   Result{Uvalue: uint64(0)},
 	},
 	exprTests{
 		Input: bytes.NewBuffer([]byte{byte(DW_OP_addr), 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}),
-		Res:   Result{Value: binary.BigEndian.Uint64([]byte{0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})},
+		Res:   Result{Uvalue: binary.BigEndian.Uint64([]byte{0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})},
 	},
 	exprTests{
 		Input: bytes.NewBuffer([]byte{byte(DW_OP_const1u), 0x24}),
-		Res:   Result{Value: 0x24},
+		Res:   Result{Uvalue: 0x24},
 	},
 	exprTests{
 		Input: bytes.NewBuffer([]byte{byte(DW_OP_const2u), 0x36, 0x42}),
-		Res:   Result{Value: 13890},
+		Res:   Result{Uvalue: 13890},
 	},
 	exprTests{
 		Input: bytes.NewBuffer([]byte{byte(DW_OP_const4u), 0x46, 0x65, 0x78, 0x87}),
-		Res:   Result{Value: 1181055111},
+		Res:   Result{Uvalue: 1181055111},
 	},
 	exprTests{
 		Input: bytes.NewBuffer([]byte{byte(DW_OP_const8u), 0x20, 0x0, 0x7a, 0x0, 0x0, 0x0, 0x0, 0x0}),
-		Res:   Result{Value: 2305977149632282624},
+		Res:   Result{Uvalue: 2305977149632282624},
+	},
+	exprTests{
+		Input: bytes.NewBuffer([]byte{byte(DW_OP_const1s), 85}),
+		Res:   Result{Svalue: 85, Signed: true},
+	},
+	exprTests{
+		Input: bytes.NewBuffer([]byte{byte(DW_OP_const2s), 255, 255}),
+		Res:   Result{Svalue: -1, Signed: true},
+	},
+	exprTests{
+		Input: bytes.NewBuffer([]byte{byte(DW_OP_const4s), 255, 255, 255, 255}),
+		Res:   Result{Svalue: -1, Signed: true},
+	},
+	exprTests{
+		Input: bytes.NewBuffer([]byte{byte(DW_OP_const8s), 255, 255, 255, 255, 255, 255, 255, 255}),
+		Res:   Result{Svalue: -1, Signed: true},
 	},
 }
 
 func init() {
 	for i := 1; i < 32; i++ {
 		input := bytes.NewBuffer([]byte{byte(DW_OP_lit0 + Opcode(i))})
-		output := Result{Value: uint64(i)}
+		output := Result{Uvalue: uint64(i)}
 		e := exprTests{input, output}
 		tests = append(tests, e)
 	}

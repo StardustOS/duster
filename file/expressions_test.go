@@ -20,6 +20,22 @@ var tests = []exprTests{
 		Input: bytes.NewBuffer([]byte{byte(DW_OP_addr), 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}),
 		Res:   Result{Value: binary.BigEndian.Uint64([]byte{0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})},
 	},
+	exprTests{
+		Input: bytes.NewBuffer([]byte{byte(DW_OP_const1u), 0x24}),
+		Res:   Result{Value: 0x24},
+	},
+	exprTests{
+		Input: bytes.NewBuffer([]byte{byte(DW_OP_const2u), 0x36, 0x42}),
+		Res:   Result{Value: 13890},
+	},
+	exprTests{
+		Input: bytes.NewBuffer([]byte{byte(DW_OP_const4u), 0x46, 0x65, 0x78, 0x87}),
+		Res:   Result{Value: 1181055111},
+	},
+	exprTests{
+		Input: bytes.NewBuffer([]byte{byte(DW_OP_const8u), 0x20, 0x0, 0x7a, 0x0, 0x0, 0x0, 0x0, 0x0}),
+		Res:   Result{Value: 2305977149632282624},
+	},
 }
 
 func init() {

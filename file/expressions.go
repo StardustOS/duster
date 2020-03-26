@@ -46,7 +46,12 @@ func (p *Parser) Parse() error {
 	for p.Input.Len() > 0 {
 		rawInput := p.Input.Next(1)
 		op := Opcode(rawInput[0])
-		op.operation(&p.stack)
+		if size, ok := operands[op]; ok {
+			operand := p.Input.Next(size)
+			op.operation(&p.stack, operand)
+		} else {
+			op.operation(&p.stack, nil)
+		}
 	}
 	return nil
 }

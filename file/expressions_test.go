@@ -2,6 +2,7 @@ package file
 
 import (
 	"bytes"
+	"encoding/binary"
 	"testing"
 )
 
@@ -14,6 +15,10 @@ var tests = []exprTests{
 	exprTests{
 		Input: bytes.NewBuffer([]byte{byte(DW_OP_lit0)}),
 		Res:   Result{Value: uint64(0)},
+	},
+	exprTests{
+		Input: bytes.NewBuffer([]byte{byte(DW_OP_addr), 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0}),
+		Res:   Result{Value: binary.BigEndian.Uint64([]byte{0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0})},
 	},
 }
 

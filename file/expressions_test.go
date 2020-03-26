@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+
+	"github.com/filecoin-project/go-leb128"
 )
 
 type exprTests struct {
@@ -51,6 +53,10 @@ var tests = []exprTests{
 	exprTests{
 		Input: bytes.NewBuffer([]byte{byte(DW_OP_const8s), 255, 255, 255, 255, 255, 255, 255, 255}),
 		Res:   Result{Svalue: -1, Signed: true},
+	},
+	exprTests{
+		Input: bytes.NewBuffer(append([]byte{byte(DW_OP_constu)}, leb128.FromUInt64(2^40)...)),
+		Res:   Result{Uvalue: 2 ^ 40},
 	},
 }
 

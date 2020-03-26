@@ -50,6 +50,18 @@ type Parser struct {
 	stack stack
 }
 
+func readLEBI128Integer(input *bytes.Buffer) []byte {
+	found := false
+	var bytes []byte
+	for !found {
+		b := input.Next(1)
+		currByte := b[0]
+		bytes = append(bytes, currByte)
+		found = currByte&0x80 == 0
+	}
+	return bytes
+}
+
 func (p *Parser) Parse() error {
 	for p.Input.Len() > 0 {
 		rawInput := p.Input.Next(1)
@@ -58,7 +70,12 @@ func (p *Parser) Parse() error {
 			operand := p.Input.Next(size)
 			op.operation(&p.stack, operand)
 		} else {
-			op.operation(&p.stack, nil)
+			if op == DW_OP_constu {
+				operand := readLEBI128Integer(p.Input)
+				op.operation(&p.stack, operand)
+			} else {
+				op.operation(&p.stack, nil)
+			}
 		}
 	}
 	return nil

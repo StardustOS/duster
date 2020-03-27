@@ -76,8 +76,11 @@ func (p *Parser) Parse() error {
 			operand := p.Input.Next(size)
 			op.operation(&p.stack, operand, p.Regs)
 		} else {
-			if op == DW_OP_constu || op == DW_OP_consts || op == DW_OP_fbreg || (op >= DW_OP_breg0 && op <= DW_OP_breg31) {
+			if op == DW_OP_constu || op == DW_OP_consts || op == DW_OP_fbreg || (op >= DW_OP_breg0 && op <= DW_OP_breg31) || op == DW_OP_bregx {
 				operand := readLEBI128Integer(p.Input)
+				if op == DW_OP_bregx {
+					operand = append(operand, readLEBI128Integer(p.Input)...)
+				}
 				op.operation(&p.stack, operand, p.Regs)
 				if op == DW_OP_fbreg {
 					element, _ := p.stack.pop()

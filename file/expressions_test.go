@@ -10,12 +10,16 @@ import (
 )
 
 const (
-	pc = 0x91a
+	pc           = 0x91a
+	reg dummyReg = 40
 )
 
 type dummyReg uint
 
 func (r dummyReg) GetRegister(v uint) uint64 {
+	if v == uint(reg) {
+		return 0x08
+	}
 	return 0x102004
 }
 
@@ -92,12 +96,19 @@ func init() {
 		e := exprTests{input, output}
 		tests = append(tests, e)
 	}
+
+	inputSlice := []byte{byte(DW_OP_bregx)}
+	fmt.Println("HERE", uint64(reg))
+	inputSlice = append(inputSlice, leb128.FromUInt64(uint64(reg))...)
+	inputSlice = append(inputSlice, leb128.FromUInt64(128)...)
+	input := bytes.NewBuffer(inputSlice)
+	output := Result{Uvalue: uint64(0x08 + 128)}
+	e := exprTests{input, output}
+	tests = append(tests, e)
 }
 
 func TestParse(t *testing.T) {
 	for _, test := range tests {
-		fmt.Println("YOU FUCK")
-		fmt.Println(test.Input)
 		p := Parser{Input: test.Input, StackPointer: pc, Regs: dummyReg(0)}
 		err := p.Parse()
 		if err != nil {

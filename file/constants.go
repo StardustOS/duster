@@ -2,6 +2,7 @@ package file
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 
 	"github.com/filecoin-project/go-leb128"
@@ -58,6 +59,7 @@ const (
 	DW_OP_fbreg   Opcode = 0x91
 	DW_OP_breg0   Opcode = 0x50
 	DW_OP_breg31  Opcode = 0x8f
+	DW_OP_bregx   Opcode = 0x92
 )
 
 var operands = map[Opcode]int{
@@ -155,6 +157,19 @@ func (op Opcode) operation(s *stack, operand []byte, regs Registers) {
 			element := item{uVal: val}
 			s.push(element)
 		}
+	case DW_OP_bregx:
+		index := 0
+		register := leb128.ToBigInt(operand)
+		fmt.Println("Register val", register)
+		for operand[index]&0x80 != 0 {
+			index++
+		}
+		offset := leb128.ToBigInt(operand[index+1:])
+		//FIX THIS:
+		regVal := int64(regs.GetRegister(uint(register.Uint64())))
+		fmt.Println(regVal)
+		element := item{uVal: uint64(regVal + offset.Int64())}
+		s.push(element)
 		//TODO: error stuff
 	}
 }

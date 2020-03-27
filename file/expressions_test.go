@@ -3,6 +3,7 @@ package file
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"testing"
 
 	"github.com/filecoin-project/go-leb128"
@@ -11,6 +12,12 @@ import (
 const (
 	pc = 0x91a
 )
+
+type dummyReg uint
+
+func (r dummyReg) GetRegister(v uint) uint64 {
+	return 0x102004
+}
 
 type exprTests struct {
 	Input *bytes.Buffer
@@ -75,10 +82,22 @@ func init() {
 		e := exprTests{input, output}
 		tests = append(tests, e)
 	}
+
+	for i := 0; i < 32; i++ {
+		inputSlice := []byte{byte(DW_OP_breg0 + Opcode(i))}
+		inputSlice = append(inputSlice, leb128.FromUInt64(2^20+2)...)
+
+		input := bytes.NewBuffer(inputSlice)
+		output := Result{Uvalue: uint64(2 ^ 20 + 2 + 0x102004)}
+		e := exprTests{input, output}
+		tests = append(tests, e)
+	}
 }
 
 func TestParse(t *testing.T) {
 	for _, test := range tests {
+		fmt.Println("YOU FUCK")
+		fmt.Println(test.Input)
 		p := Parser{Input: test.Input, StackPointer: pc, Regs: dummyReg(0)}
 		err := p.Parse()
 		if err != nil {

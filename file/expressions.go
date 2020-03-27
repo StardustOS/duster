@@ -8,12 +8,6 @@ const (
 	Empty Error = 1
 )
 
-type dummyReg uint
-
-func (r dummyReg) GetRegister(v uint) uint64 {
-	return 0x102004
-}
-
 type Registers interface {
 	GetRegister(uint) uint64
 }
@@ -82,7 +76,7 @@ func (p *Parser) Parse() error {
 			operand := p.Input.Next(size)
 			op.operation(&p.stack, operand, p.Regs)
 		} else {
-			if op == DW_OP_constu || op == DW_OP_consts || op == DW_OP_fbreg {
+			if op == DW_OP_constu || op == DW_OP_consts || op == DW_OP_fbreg || (op >= DW_OP_breg0 && op <= DW_OP_breg31) {
 				operand := readLEBI128Integer(p.Input)
 				op.operation(&p.stack, operand, p.Regs)
 				if op == DW_OP_fbreg {

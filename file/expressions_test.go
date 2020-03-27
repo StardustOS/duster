@@ -8,6 +8,10 @@ import (
 	"github.com/filecoin-project/go-leb128"
 )
 
+const (
+	pc = 0x91a
+)
+
 type exprTests struct {
 	Input *bytes.Buffer
 	Res   Result
@@ -58,6 +62,10 @@ var tests = []exprTests{
 		Input: bytes.NewBuffer(append([]byte{byte(DW_OP_constu)}, leb128.FromUInt64(2^40)...)),
 		Res:   Result{Uvalue: 2 ^ 40},
 	},
+	exprTests{
+		Input: bytes.NewBuffer(append([]byte{byte(DW_OP_fbreg)}, leb128.FromUInt64(2^20)...)),
+		Res:   Result{Uvalue: 2 ^ 20 + pc},
+	},
 }
 
 func init() {
@@ -71,7 +79,7 @@ func init() {
 
 func TestParse(t *testing.T) {
 	for _, test := range tests {
-		p := Parser{Input: test.Input}
+		p := Parser{Input: test.Input, StackPointer: pc}
 		err := p.Parse()
 		if err != nil {
 			t.Error(err)

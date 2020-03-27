@@ -8,6 +8,11 @@ const (
 	Empty Error = 1
 )
 
+type Registers interface {
+	GetRegister(string) uint64
+	SetRegister(string, uint64)
+}
+
 func (e Error) Error() string {
 	switch e {
 	case Empty:
@@ -46,8 +51,9 @@ type Result struct {
 }
 
 type Parser struct {
-	Input *bytes.Buffer
-	stack stack
+	Input        *bytes.Buffer
+	StackPointer uint64
+	stack        stack
 }
 
 func readLEBI128Integer(input *bytes.Buffer) []byte {
@@ -70,9 +76,14 @@ func (p *Parser) Parse() error {
 			operand := p.Input.Next(size)
 			op.operation(&p.stack, operand)
 		} else {
-			if op == DW_OP_constu {
+			if op == DW_OP_constu || op == DW_OP_consts || op == DW_OP_fbreg {
 				operand := readLEBI128Integer(p.Input)
 				op.operation(&p.stack, operand)
+				if op == DW_OP_fbreg {
+					element, _ := p.stack.pop()
+					element.uVal = element.uVal + p.StackPointer
+					p.stack.push(element)
+				}
 			} else {
 				op.operation(&p.stack, nil)
 			}

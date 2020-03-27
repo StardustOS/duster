@@ -8,9 +8,14 @@ const (
 	Empty Error = 1
 )
 
+type dummyReg uint
+
+func (r dummyReg) GetRegister(v uint) uint64 {
+	return 0x102004
+}
+
 type Registers interface {
-	GetRegister(string) uint64
-	SetRegister(string, uint64)
+	GetRegister(uint) uint64
 }
 
 func (e Error) Error() string {
@@ -54,6 +59,7 @@ type Parser struct {
 	Input        *bytes.Buffer
 	StackPointer uint64
 	stack        stack
+	Regs         Registers
 }
 
 func readLEBI128Integer(input *bytes.Buffer) []byte {
@@ -74,18 +80,18 @@ func (p *Parser) Parse() error {
 		op := Opcode(rawInput[0])
 		if size, ok := operands[op]; ok {
 			operand := p.Input.Next(size)
-			op.operation(&p.stack, operand)
+			op.operation(&p.stack, operand, p.Regs)
 		} else {
 			if op == DW_OP_constu || op == DW_OP_consts || op == DW_OP_fbreg {
 				operand := readLEBI128Integer(p.Input)
-				op.operation(&p.stack, operand)
+				op.operation(&p.stack, operand, p.Regs)
 				if op == DW_OP_fbreg {
 					element, _ := p.stack.pop()
 					element.uVal = element.uVal + p.StackPointer
 					p.stack.push(element)
 				}
 			} else {
-				op.operation(&p.stack, nil)
+				op.operation(&p.stack, nil, p.Regs)
 			}
 		}
 	}

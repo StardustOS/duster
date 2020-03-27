@@ -10,8 +10,8 @@ const char* string = "my string";
 // };
 
 int clean(int val1, int val2) {
-    int a = val1 + val2 + y;
-    printf("%d\n", a);
+    int clean_a = val1 + val2 + y;
+    printf("%d\n", clean_a);
     int y = 20;
     printf("%d\n", y);
 }

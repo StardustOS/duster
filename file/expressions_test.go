@@ -79,7 +79,7 @@ func init() {
 
 func TestParse(t *testing.T) {
 	for _, test := range tests {
-		p := Parser{Input: test.Input, StackPointer: pc}
+		p := Parser{Input: test.Input, StackPointer: pc, Regs: dummyReg(0)}
 		err := p.Parse()
 		if err != nil {
 			t.Error(err)

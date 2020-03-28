@@ -1,49 +1,16 @@
 package file
 
 import (
-	"encoding/binary"
 	"fmt"
-	"math/big"
-
-	"github.com/filecoin-project/go-leb128"
 )
 
 type Opcode byte
+type OperandType uint
 
 const (
 	// DW_OP_litx just means push the literal value x on to the stack
 	// (e.g. DW_OP_lit0 just means push zero onto the stack)
 	DW_OP_lit0    Opcode = 0x30
-	DW_OP_lit1    Opcode = 0x31
-	DW_OP_lit2    Opcode = 0x32
-	DW_OP_lit3    Opcode = 0x33
-	DW_OP_lit4    Opcode = 0x34
-	DW_OP_lit5    Opcode = 0x35
-	DW_OP_lit6    Opcode = 0x36
-	DW_OP_lit7    Opcode = 0x37
-	DW_OP_lit8    Opcode = 0x38
-	DW_OP_lit9    Opcode = 0x39
-	DW_OP_lit10   Opcode = 0x3a
-	DW_OP_lit11   Opcode = 0x3b
-	DW_OP_lit12   Opcode = 0x3c
-	DW_OP_lit13   Opcode = 0x3d
-	DW_OP_lit14   Opcode = 0x3e
-	DW_OP_lit15   Opcode = 0x3f
-	DW_OP_lit16   Opcode = 0x40
-	DW_OP_lit17   Opcode = 0x41
-	DW_OP_lit18   Opcode = 0x42
-	DW_OP_lit19   Opcode = 0x43
-	DW_OP_lit20   Opcode = 0x44
-	DW_OP_lit21   Opcode = 0x45
-	DW_OP_lit22   Opcode = 0x46
-	DW_OP_lit23   Opcode = 0x47
-	DW_OP_lit24   Opcode = 0x48
-	DW_OP_lit25   Opcode = 0x49
-	DW_OP_lit26   Opcode = 0x4a
-	DW_OP_lit27   Opcode = 0x4b
-	DW_OP_lit28   Opcode = 0x4c
-	DW_OP_lit29   Opcode = 0x4d
-	DW_OP_lit30   Opcode = 0x4e
 	DW_OP_lit31   Opcode = 0x4f
 	DW_OP_addr    Opcode = 0x03
 	DW_OP_const1u Opcode = 0x08
@@ -60,116 +27,114 @@ const (
 	DW_OP_breg0   Opcode = 0x50
 	DW_OP_breg31  Opcode = 0x8f
 	DW_OP_bregx   Opcode = 0x92
+
+	unsignedLEBI           OperandType = 1
+	signedLEBI             OperandType = 2
+	signedInt              OperandType = 3
+	unsignedInt            OperandType = 4
+	unsignedThenSignedLEBI OperandType = 4
 )
 
-var operands = map[Opcode]int{
-	DW_OP_addr:    8,
-	DW_OP_const1u: 1,
-	DW_OP_const2u: 2,
-	DW_OP_const4u: 4,
-	DW_OP_const8u: 8,
-	DW_OP_const1s: 1,
-	DW_OP_const2s: 2,
-	DW_OP_const4s: 4,
-	DW_OP_const8s: 8,
+func (op Opcode) OperandSize() (size uint) {
+	switch op {
+	case DW_OP_addr, DW_OP_const8s, DW_OP_const8u:
+		size = 8
+	case DW_OP_const1u, DW_OP_const1s:
+		size = 1
+	case DW_OP_const2u, DW_OP_const2s:
+		size = 2
+	case DW_OP_const4u, DW_OP_const4s:
+		size = 4
+	}
+	return
 }
 
-func (op Opcode) operation(s *stack, operand []byte, regs Registers) {
+func (op Opcode) OperandType() (t []OperandType) {
+	if op >= DW_OP_breg0 && op <= DW_OP_breg31 {
+		t = append(t, signedLEBI)
+		return
+	}
+	switch op {
+	case DW_OP_consts, DW_OP_fbreg:
+		t = append(t, signedLEBI)
+	case DW_OP_constu:
+		t = append(t, unsignedLEBI)
+	case DW_OP_addr:
+		fallthrough
+	case DW_OP_const1u:
+		fallthrough
+	case DW_OP_const2u:
+		fallthrough
+	case DW_OP_const4u:
+		fallthrough
+	case DW_OP_const8u:
+		t = append(t, unsignedInt)
+	case DW_OP_const1s:
+		fallthrough
+	case DW_OP_const2s:
+		fallthrough
+	case DW_OP_const4s:
+		fallthrough
+	case DW_OP_const8s:
+		t = append(t, signedInt)
+	case DW_OP_bregx:
+		t = append(t, unsignedLEBI, signedLEBI)
+	}
+	return
+}
+
+func (op Opcode) NoOperand() (no uint) {
+	switch {
+	case DW_OP_const1u <= op && op <= DW_OP_const8s:
+		fallthrough
+	case op >= DW_OP_breg0 && op <= DW_OP_breg31:
+		fallthrough
+	case op == DW_OP_constu:
+		fallthrough
+	case op == DW_OP_consts:
+		fallthrough
+	case op == DW_OP_addr:
+		no = 1
+	case op == DW_OP_bregx:
+		no = 2
+	}
+
+	return
+}
+
+func (op Opcode) operation(s *stack, operands []Value, regs Registers) {
+	var res Value
 	if op >= DW_OP_lit0 && op <= DW_OP_lit31 {
 		value := uint64(op - DW_OP_lit0)
-		element := item{uVal: value, signed: false}
-		s.push(element)
+		res.Uvalue = value
 	} else if op >= DW_OP_breg0 && op <= DW_OP_breg31 {
-		regVal := regs.GetRegister(uint(op - DW_OP_breg0))
-		bigInt := leb128.ToBigInt(operand)
-		if bigInt.IsUint64() {
-			val := bigInt.Uint64()
-			element := item{uVal: uint64(int64(val) + int64(regVal))}
-			s.push(element)
-		}
+		reg := uint64(op - DW_OP_breg0)
+		regVal := int64(regs.GetRegister(reg))
+		offset := operands[0]
+		fmt.Printf("Offset %+v\n", offset)
+		address := uint64(regVal + offset.Int64())
+		fmt.Println("address", address)
+		res.Uvalue = address
 	}
 
 	switch op {
 	case DW_OP_addr:
-		address := binary.BigEndian.Uint64(operand)
-		element := item{uVal: address, signed: false}
-		s.push(element)
-	case DW_OP_const1u:
-		unsignedConst := uint64(uint8(operand[0]))
-		element := item{uVal: unsignedConst, signed: false}
-		s.push(element)
-	case DW_OP_const2u:
-		unsignedConst := uint64(binary.BigEndian.Uint16(operand))
-		element := item{uVal: unsignedConst, signed: false}
-		s.push(element)
-	case DW_OP_const4u:
-		unsignedConst := uint64(binary.BigEndian.Uint32(operand))
-		element := item{uVal: unsignedConst, signed: false}
-		s.push(element)
-	case DW_OP_const8u:
-		unsignedConst := binary.BigEndian.Uint64(operand)
-		element := item{uVal: unsignedConst, signed: false}
-		s.push(element)
-	case DW_OP_const1s:
-		signedConst := int64(int8(operand[0]))
-		element := item{sVal: signedConst, signed: true}
-		s.push(element)
-	case DW_OP_const2s:
-		signedConst := int64(int16(binary.BigEndian.Uint16(operand)))
-		element := item{sVal: signedConst, signed: true}
-		s.push(element)
-	case DW_OP_const4s:
-		signedConst := int64(int32(binary.BigEndian.Uint32(operand)))
-		element := item{sVal: signedConst, signed: true}
-		s.push(element)
-	case DW_OP_const8s:
-		signedConst := int64(binary.BigEndian.Uint64(operand))
-		element := item{sVal: signedConst, signed: true}
-		s.push(element)
-	case DW_OP_constu:
-		bigInt := leb128.ToBigInt(operand)
-		var element item
-		if bigInt.IsUint64() {
-			element = item{uVal: bigInt.Uint64()}
-		} else {
-			mask := big.NewInt(2 ^ 64)
-			val := big.NewInt(0)
-			val.And(bigInt, mask)
-			element = item{uVal: val.Uint64()}
-		}
-		s.push(element)
-	case DW_OP_consts:
-		bigInt := leb128.ToBigInt(operand)
-		var element item
-		if bigInt.IsInt64() {
-			element = item{sVal: bigInt.Int64(), signed: true}
-		} else {
-			mask := big.NewInt(2 ^ 64)
-			val := big.NewInt(0)
-			val.And(bigInt, mask)
-			element = item{sVal: val.Int64(), signed: true}
-		}
-		s.push(element)
+		fallthrough
+	case DW_OP_const1u, DW_OP_const2u, DW_OP_const4u, DW_OP_const8u:
+		fallthrough
+	case DW_OP_const1s, DW_OP_const2s, DW_OP_const4s, DW_OP_const8s:
+		fallthrough
+	case DW_OP_constu, DW_OP_consts:
+		res = operands[0]
 	case DW_OP_fbreg:
-		bigInt := leb128.ToBigInt(operand)
-		if bigInt.IsUint64() {
-			val := bigInt.Uint64()
-			element := item{uVal: val}
-			s.push(element)
-		}
+		val := operands[0]
+		base := int64(regs.GetFrameBase())
+		res.Uvalue = uint64(val.Int64() + base)
 	case DW_OP_bregx:
-		index := 0
-		register := leb128.ToBigInt(operand)
-		fmt.Println("Register val", register)
-		for operand[index]&0x80 != 0 {
-			index++
-		}
-		offset := leb128.ToBigInt(operand[index+1:])
-		//FIX THIS:
-		regVal := int64(regs.GetRegister(uint(register.Uint64())))
-		fmt.Println(regVal)
-		element := item{uVal: uint64(regVal + offset.Int64())}
-		s.push(element)
-		//TODO: error stuff
+		reg := operands[0]
+		offset := operands[1]
+		regVal := int64(regs.GetRegister(reg.Uvalue))
+		res.Uvalue = uint64(regVal + offset.Int64())
 	}
+	s.push(res)
 }

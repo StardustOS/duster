@@ -15,10 +15,6 @@ func (i *info) addLineInformation(entry *dwarf.LineEntry) {
 	if i.lineToAddressInfo == nil {
 		i.lineToAddressInfo = make(map[int][]uint64)
 	}
-	if strings.Contains(entry.File.Name, "startup.c") {
-		// fmt.Println("Line no", entry.Line)
-		// fmt.Printf("%+v\n", entry)
-	}
 	list, _ := i.lineToAddressInfo[entry.Line]
 	i.lineToAddressInfo[entry.Line] = append(list, entry.Address)
 }

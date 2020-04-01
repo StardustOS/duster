@@ -4,20 +4,21 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/big"
+	"fmt"
 
 	"github.com/AtomicMalloc/go-leb128"
 )
 
 type Error int
 
-const (
-	Empty Error = 1
-)
-
 type Registers interface {
 	GetRegister(uint64) uint64
 	GetFrameBase() uint64
 }
+
+const (
+	Empty Error = 1
+)
 
 func (e Error) Error() string {
 	switch e {
@@ -71,28 +72,6 @@ func getLast64Bits(no *big.Int) *big.Int {
 	return val.And(mask, no)
 }
 
-func extendSlice(bytes []byte, bigEndian bool) []byte {
-	length := len(bytes)
-	if length < 8 {
-		extend := make([]byte, 8-length)
-		if bigEndian {
-			bytes = append(extend, bytes...)
-		} else {
-			bytes = append(bytes, extend...)
-		}
-	}
-	return bytes
-}
-
-func parseUnsignedInt(input *bytes.Reader, opcode Opcode) uint64 {
-	length := opcode.OperandSize()
-	bytes := make([]byte, length)
-	input.Read(bytes)
-	bytes = extendSlice(bytes, true)
-
-	integer := binary.BigEndian.Uint64(bytes)
-	return integer
-}
 
 func (p *Parser) parseSignedInt(opcode Opcode) (v int64) {
 	length := opcode.OperandSize()
@@ -142,7 +121,7 @@ func (p *Parser) Parse() error {
 			return err
 		}
 		opcode := Opcode(rawOpcode)
-		noOperands := opcode.NoOperand()
+
 		var operands []Value
 
 		operandTypes := opcode.OperandType()
@@ -150,6 +129,7 @@ func (p *Parser) Parse() error {
 			var val Value
 			switch operandType {
 			case signedLEBI:
+				fmt.Println(p.Input)
 				no, err := leb128.ToBigInt(p.Input)
 				if err != nil {
 					return err

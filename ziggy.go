@@ -12,7 +12,7 @@ func main() {
 
 	var domainid int
 	var filename string
-	flag.StringVar(&filename, "path", "FUCK", "Path to the os's binary")
+	flag.StringVar(&filename, "path", "que", "Path to the os's binary")
 	flag.IntVar(&domainid, "id", -1, "The domain id to connect")
 	flag.Parse()
 	fmt.Println(filename)

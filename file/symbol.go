@@ -2,7 +2,11 @@ package file
 
 import (
 	"debug/dwarf"
+	"debug/elf"
+	"encoding/binary"
 	"fmt"
+
+	"github.com/go-delve/delve/pkg/dwarf/op"
 )
 
 type SymbolError int
@@ -23,7 +27,18 @@ func (err SymbolError) Error() string {
 }
 
 type Variable struct {
-	Name string
+	Name     string
+	Location []byte
+	frame    uint64
+}
+
+func (variable *Variable) Address(regs op.DwarfRegisters) int64 {
+	//	regs.FrameBase = int64(variable.frame)
+
+	address, m, b := op.ExecuteStackProgram(regs, variable.Location)
+	fmt.Println("M ", m)
+	fmt.Println("B", b)
+	return address
 }
 
 type SymbolTable struct {
@@ -32,6 +47,7 @@ type SymbolTable struct {
 	children []*SymbolTable
 	LowerPC  uint64
 	UpperPC  uint64
+	Regs     Registers
 }
 
 func (sym *SymbolTable) PCInStack(pc uint64) bool {
@@ -46,7 +62,6 @@ func (sym *SymbolTable) GetNextTable(pc uint64) *SymbolTable {
 	for _, child := range sym.children {
 		if child.PCInStack(pc) {
 			c := child.GetNextTable(pc)
-			fmt.Printf("%+v\n", c)
 			return c
 		}
 	}
@@ -66,11 +81,11 @@ func (sym *SymbolTable) Lookup(symbolName string) (Variable, error) {
 	return Variable{}, SymbolNotFound
 }
 
-func (sym *SymbolTable) AddVariable(name string) {
+func (sym *SymbolTable) AddVariable(name string, location []byte, upper uint64) {
 	if sym.symbols == nil {
 		sym.symbols = make(map[string]Variable)
 	}
-	sym.symbols[name] = Variable{Name: name}
+	sym.symbols[name] = Variable{Name: name, Location: location, frame: upper}
 }
 
 func (sym *SymbolTable) AddParent(parent *SymbolTable) {
@@ -79,9 +94,19 @@ func (sym *SymbolTable) AddParent(parent *SymbolTable) {
 
 type Symbol struct {
 	pc    uint64
+	RSP   uint64
 	Data  *dwarf.Data
 	entry *dwarf.Entry
 	root  *SymbolTable
+}
+
+func (sym *Symbol) Init(filename string) error {
+	file, err := elf.Open(filename)
+	if err != nil {
+		return err
+	}
+	sym.Data, err = file.DWARF()
+	return err
 }
 
 func parsePC(entry *dwarf.Entry) (lower, upper uint64, err error) {
@@ -102,6 +127,32 @@ func parsePC(entry *dwarf.Entry) (lower, upper uint64, err error) {
 		}
 		upper = uint64(highPC)
 		upper += uint64(lowPC)
+	}
+	return
+}
+
+func parseFramebase(entry *dwarf.Entry) (v uint64) {
+	field := entry.AttrField(dwarf.AttrFrameBase)
+
+	if field != nil {
+		framebase := field.Val.([]uint8)
+		fmt.Println(framebase)
+		bytes := []byte(framebase)
+		length := len(bytes)
+		switch length {
+		case 1:
+			val := int8(bytes[0])
+			v = uint64(val)
+		case 2:
+			val := int16(binary.BigEndian.Uint16(bytes))
+			v = uint64(val)
+		case 4:
+			val := int32(binary.BigEndian.Uint32(bytes))
+			v = uint64(val)
+		case 8:
+			val := int64(binary.BigEndian.Uint64(bytes))
+			v = uint64(val)
+		}
 	}
 	return
 }
@@ -127,13 +178,19 @@ func (sym *Symbol) parse(cu *dwarf.Entry) error {
 				if !ok {
 					return InvalidDWARF
 				}
-				current.AddVariable(name)
+				field = entry.AttrField(dwarf.AttrLocation)
+				if field != nil {
+					bytes := field.Val.([]byte)
+					current.AddVariable(name, bytes, current.UpperPC)
+				}
 			}
 		case dwarf.TagSubprogram:
 			lowPC, highPC, err := parsePC(entry)
+
 			if err != nil {
 				return err
 			}
+
 			parent := sym.root
 			newTable := &SymbolTable{LowerPC: lowPC, UpperPC: highPC}
 			parent.AddChild(newTable)
@@ -172,5 +229,21 @@ func (sym *Symbol) GetSymbol(pc uint64, name string) (Variable, error) {
 		return Variable{}, err
 	}
 	current := sym.root.GetNextTable(pc)
-	return current.Lookup(name)
+	variable, err := current.Lookup(name)
+
+	if err != nil {
+		return Variable{}, err
+	}
+	// fmt.Println(variable)
+	// p := Parser{Input: bytes.NewReader(variable.Location), StackPointer: sym.RSP}
+	// err = p.Parse()
+	// if err != nil {
+	// 	return Variable{}, err
+	// }
+	// val, err := p.Result()
+	// if err != nil {
+	// 	return Variable{}, err
+	// }
+	// variable.Address = val.Uvalue
+	return variable, nil
 }

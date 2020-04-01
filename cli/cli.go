@@ -32,6 +32,7 @@ func (cli *CLI) Init(domaind uint32, filename string) error {
 		prompt.Suggest{Text: "step", Description: "Steps forward one line (note a breakpoint must be set before hand)"},
 		prompt.Suggest{Text: "continue", Description: "Continue to the next breakpoint"},
 		prompt.Suggest{Text: "quit", Description: "Exit the debugger"},
+		prompt.Suggest{Text: "read", Description: "Read a variable"},
 	}
 	cli.dbg = debugger.Debugger{}
 	err := cli.dbg.Init(domaind, filename)
@@ -78,6 +79,13 @@ func (cli *CLI) ProcessInput(input string) {
 			fmt.Println(cli.dbg.GetLineInformation())
 		} else {
 			fmt.Println("Error: the doamin has not been paused")
+		}
+	case "read":
+		if cli.dbg.IsPaused() {
+			fmt.Println("HERE")
+			fmt.Println(values)
+			_, err := cli.dbg.GetVariable(values[1])
+			fmt.Println(err)
 		}
 	case "quit":
 		os.Exit(0)

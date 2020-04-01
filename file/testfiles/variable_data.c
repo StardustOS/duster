@@ -2,7 +2,7 @@
 
 int y;
 const char* string = "my string";
-
+static int meh2 = 0;
 // struct k {
 //     int v;
 //     char c;

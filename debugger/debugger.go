@@ -16,14 +16,30 @@ const (
 	breakInt   byte   = 0xCC
 )
 
+type regs struct {
+	registers *xen.Register
+}
+
+func (reg *regs) GetRegister(regNo uint64) uint64 {
+	return 0
+}
+
+func (reg *regs) GetFrameBase() uint64 {
+	val, _ := reg.registers.GetRegister("rsp")
+	return val
+}
+
 type Debugger struct {
 	domainid     uint32
+	rip          uint64
 	breakpoints  map[uint64]byte
 	controller   xen.Xenctrl
 	memory       xen.Memory
 	call         xen.XenCall
+	registers    *regs
 	fileHandler  file.File
 	insinglestep bool
+	Symbols      file.Symbol
 }
 
 //Init must be run before any of the other methods
@@ -51,6 +67,10 @@ func (debugger *Debugger) Init(domainid uint32, name string) error {
 	}
 	debugger.fileHandler.Name = name
 	err = debugger.fileHandler.Init()
+	if err != nil {
+		return err
+	}
+	err = debugger.Symbols.Init(name)
 	return err
 }
 
@@ -119,7 +139,36 @@ func (debugger *Debugger) Step(vcpu uint32) uint64 {
 	if _, ok := debugger.breakpoints[previousRIP]; ok {
 		debugger.memory.Write(previousRIP, 1, []byte{breakInt})
 	}
+	debugger.registers.registers = registers
+	debugger.rip = rip
 	return rip
+}
+
+func (debugger *Debugger) GetVariable(name string) ([]byte, error) {
+	registers := debugger.controller.GetRegisterContext(debugger.domainid, 0)
+	rip, _ := registers.GetRegister("rip")
+	variable, err := debugger.Symbols.GetSymbol(rip, name)
+	if err != nil {
+		return nil, err
+	}
+	dregs := registers.DWARFRegisters()
+	address := variable.Address(*dregs)
+	fmt.Println("Address", address)
+	// debugger.registers = &regs{}
+	// debugger.registers.registers = registers
+	// p := file.Parser{Input: bytes.NewReader(variable.Location), Regs: debugger.registers}
+	// err = p.Parse()
+	// address, err := p.Result()
+	// if err != nil {
+	// 	return nil, err
+	// }
+	err = debugger.memory.Map(uint64(address), debugger.domainid, 1, 0)
+	if err != nil {
+		return nil, err
+	}
+	bytes, err := debugger.memory.Read(uint64(address), 1)
+	fmt.Println("Integer", bytes)
+	return nil, err
 }
 
 func (debugger *Debugger) Continue(vcpu uint32) error {

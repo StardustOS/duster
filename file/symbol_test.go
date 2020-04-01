@@ -145,7 +145,7 @@ func TestGetSymbol(t *testing.T) {
 							t.Errorf("Error: expected to get %s not %s", test.Err, err)
 						}
 					}
-					if variable != expected && !test.ExpectedError {
+					if variable.Name != expected.Name && !test.ExpectedError {
 						t.Errorf("Expected %+v but got %+v", expected, variable)
 					}
 				}

@@ -3,8 +3,8 @@ package file
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"testing"
+	"math/big"
 
 	"github.com/AtomicMalloc/go-leb128"
 )
@@ -78,8 +78,8 @@ var tests = []exprTests{
 		Res:   Value{Uvalue: 2 ^ 40},
 	},
 	exprTests{
-		Input: bytes.NewReader(append([]byte{byte(DW_OP_fbreg)}, leb128.FromUInt64(2^20)...)),
-		Res:   Value{Uvalue: 2 ^ 20 + pc},
+		Input: bytes.NewReader(append([]byte{byte(DW_OP_fbreg)}, leb128.FromBigInt(big.NewInt(-24))...)),
+		Res:   Value{Uvalue: 2306},
 	},
 }
 
@@ -102,7 +102,6 @@ func init() {
 	}
 
 	inputSlice := []byte{byte(DW_OP_bregx)}
-	fmt.Println("HERE", uint64(reg))
 	inputSlice = append(inputSlice, leb128.FromUInt64(uint64(reg))...)
 	inputSlice = append(inputSlice, leb128.FromUInt64(128)...)
 	input := bytes.NewReader(inputSlice)

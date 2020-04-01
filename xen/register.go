@@ -2,7 +2,11 @@ package xen
 
 import "C"
 import (
+	"encoding/binary"
 	"fmt"
+	"strings"
+
+	"github.com/go-delve/delve/pkg/dwarf/op"
 )
 
 type WordSize uint
@@ -11,6 +15,62 @@ const (
 	SixtyFourBit WordSize = 8
 	ThirtyTwoBit WordSize = 4
 )
+
+var amd64DwarfToName = map[uint64]string{
+	0:  "Rax",
+	1:  "Rdx",
+	2:  "Rcx",
+	3:  "Rbx",
+	4:  "Rsi",
+	5:  "Rdi",
+	6:  "Rbp",
+	7:  "Rsp",
+	8:  "R8",
+	9:  "R9",
+	10: "R10",
+	11: "R11",
+	12: "R12",
+	13: "R13",
+	14: "R14",
+	15: "R15",
+	16: "Rip",
+	17: "XMM0",
+	18: "XMM1",
+	19: "XMM2",
+	20: "XMM3",
+	21: "XMM4",
+	22: "XMM5",
+	23: "XMM6",
+	24: "XMM7",
+	25: "XMM8",
+	26: "XMM9",
+	27: "XMM10",
+	28: "XMM11",
+	29: "XMM12",
+	30: "XMM13",
+	31: "XMM14",
+	32: "XMM15",
+	33: "ST(0)",
+	34: "ST(1)",
+	35: "ST(2)",
+	36: "ST(3)",
+	37: "ST(4)",
+	38: "ST(5)",
+	39: "ST(6)",
+	40: "ST(7)",
+	49: "Rflags",
+	50: "Es",
+	51: "Cs",
+	52: "Ss",
+	53: "Ds",
+	54: "Fs",
+	55: "Gs",
+	58: "Fs_base",
+	59: "Gs_base",
+	64: "MXCSR",
+	65: "CW",
+	66: "SW",
+}
 
 type Register struct {
 	Type      WordSize
@@ -52,4 +112,35 @@ func (register *Register) GetRegister(name string) (uint64, error) {
 		return content, nil
 	}
 	return 0, fmt.Errorf("The register %s could not be found", name)
+}
+
+func (register *Register) DWARFRegisters() *op.DwarfRegisters {
+	r := &op.DwarfRegisters{}
+	for key, registerName := range amd64DwarfToName {
+		registerName = strings.ToLower(registerName)
+		if val, ok := register.registers[registerName]; ok {
+			b := make([]byte, 8)
+			binary.LittleEndian.PutUint64(b, uint64(val))
+			r.AddReg(key, &op.DwarfRegister{val, b})
+		} else {
+			b := make([]byte, 8)
+			r.AddReg(key, &op.DwarfRegister{val, b})
+		}
+	}
+	var regs []*op.DwarfRegister
+
+	for _, reg := range r.Regs {
+		if reg != nil {
+			regs = append(regs, reg)
+		}
+	}
+	r.Regs = regs
+	r.ByteOrder = binary.LittleEndian
+	r.CFA = int64(register.registers["rbp"]) + 16
+	r.BPRegNum = 6
+	r.SPRegNum = 7
+	r.PCRegNum = 16
+	r.FrameBase = int64(register.registers["rbp"]) + 16
+	fmt.Printf("%+v\n", r)
+	return r
 }

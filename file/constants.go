@@ -129,6 +129,8 @@ func (op Opcode) operation(s *stack, operands []Value, regs Registers) {
 	case DW_OP_fbreg:
 		val := operands[0]
 		base := int64(regs.GetFrameBase())
+		fmt.Println("offset in here", val.Int64())
+		fmt.Println("Base", base)
 		res.Uvalue = uint64(val.Int64() + base)
 	case DW_OP_bregx:
 		reg := operands[0]

@@ -5,6 +5,7 @@ import (
 	"debug/elf"
 	"encoding/binary"
 	"fmt"
+	"strings"
 
 	"github.com/go-delve/delve/pkg/dwarf/op"
 )
@@ -27,9 +28,47 @@ func (err SymbolError) Error() string {
 }
 
 type Variable struct {
-	Name     string
-	Location []byte
-	frame    uint64
+	Name       string
+	Location   []byte
+	frame      uint64
+	typeVar    Type
+	typeOffset dwarf.Offset
+	data       *dwarf.Data
+}
+
+func (variable *Variable) ParseVal(bytes []byte) (string, error) {
+	reader := variable.data.Reader()
+	reader.Seek(variable.typeOffset)
+	entry, _ := reader.Next()
+	if entry.Tag == dwarf.TagTypedef {
+		field := entry.AttrField(dwarf.AttrType)
+		offset := field.Val.(dwarf.Offset)
+		reader := variable.data.Reader()
+		reader.Seek(offset)
+		entry, _ = reader.Next()
+	}
+	var newBase Type
+	newBase.Entry(entry)
+	fmt.Printf("%+v\n", entry)
+	return newBase.Parse(bytes)
+}
+
+func (variable *Variable) Size() int64 {
+	reader := variable.data.Reader()
+	reader.Seek(variable.typeOffset)
+	entry, _ := reader.Next()
+	if entry.Tag == dwarf.TagTypedef {
+		field := entry.AttrField(dwarf.AttrType)
+		offset := field.Val.(dwarf.Offset)
+		reader := variable.data.Reader()
+		reader.Seek(offset)
+		entry, _ = reader.Next()
+	}
+	fmt.Printf("%+v\n", entry)
+	var newBase Type
+	newBase.Entry(entry)
+	return newBase.Size
+
 }
 
 func (variable *Variable) Address(regs op.DwarfRegisters) int64 {
@@ -48,6 +87,7 @@ type SymbolTable struct {
 	LowerPC  uint64
 	UpperPC  uint64
 	Regs     Registers
+	types    map[dwarf.Offset]Type
 }
 
 func (sym *SymbolTable) PCInStack(pc uint64) bool {
@@ -81,11 +121,27 @@ func (sym *SymbolTable) Lookup(symbolName string) (Variable, error) {
 	return Variable{}, SymbolNotFound
 }
 
-func (sym *SymbolTable) AddVariable(name string, location []byte, upper uint64) {
+func (sym *SymbolTable) AddVariable(name string, location []byte, upper uint64, offset dwarf.Offset, data *dwarf.Data) {
 	if sym.symbols == nil {
 		sym.symbols = make(map[string]Variable)
 	}
-	sym.symbols[name] = Variable{Name: name, Location: location, frame: upper}
+	sym.symbols[name] = Variable{Name: name, Location: location, frame: upper, typeOffset: offset, data: data}
+}
+
+func (sym *SymbolTable) AddType(offset dwarf.Offset, varType Type) {
+	if sym.types == nil {
+		sym.types = make(map[dwarf.Offset]Type)
+	}
+	sym.types[offset] = varType
+}
+
+func (sym *SymbolTable) GetType(offset dwarf.Offset) (Type, error) {
+	if val, ok := sym.types[offset]; ok {
+		return val, nil
+	} else if sym.parent != nil {
+		return sym.parent.GetType(offset)
+	}
+	return Type{}, SymbolNotFound
 }
 
 func (sym *SymbolTable) AddParent(parent *SymbolTable) {
@@ -98,6 +154,7 @@ type Symbol struct {
 	Data  *dwarf.Data
 	entry *dwarf.Entry
 	root  *SymbolTable
+	types map[dwarf.Offset]Type
 }
 
 func (sym *Symbol) Init(filename string) error {
@@ -136,7 +193,6 @@ func parseFramebase(entry *dwarf.Entry) (v uint64) {
 
 	if field != nil {
 		framebase := field.Val.([]uint8)
-		fmt.Println(framebase)
 		bytes := []byte(framebase)
 		length := len(bytes)
 		switch length {
@@ -175,13 +231,20 @@ func (sym *Symbol) parse(cu *dwarf.Entry) error {
 			field := entry.AttrField(dwarf.AttrName)
 			if field != nil {
 				name, ok := field.Val.(string)
+				if strings.Compare(name, "val") == 0 {
+					fmt.Println(entry)
+				}
 				if !ok {
 					return InvalidDWARF
 				}
+				//fmt.Printf("%+v\n", entry)
+
 				field = entry.AttrField(dwarf.AttrLocation)
 				if field != nil {
 					bytes := field.Val.([]byte)
-					current.AddVariable(name, bytes, current.UpperPC)
+					field = entry.AttrField(dwarf.AttrType)
+					offset := field.Val.(dwarf.Offset)
+					current.AddVariable(name, bytes, current.UpperPC, offset, sym.Data)
 				}
 			}
 		case dwarf.TagSubprogram:
@@ -213,6 +276,10 @@ func (sym *Symbol) parse(cu *dwarf.Entry) error {
 				newTable.AddParent(parent)
 			}
 			current = newTable
+		case dwarf.TagBaseType:
+			var newBaseType Type
+			newBaseType.Entry(entry)
+			current.AddType(entry.Offset, newBaseType)
 		}
 	}
 	return nil
@@ -225,6 +292,7 @@ func (sym *Symbol) GetSymbol(pc uint64, name string) (Variable, error) {
 		return Variable{}, err
 	}
 	err = sym.parse(compileUnit)
+
 	if err != nil {
 		return Variable{}, err
 	}

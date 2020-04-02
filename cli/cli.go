@@ -84,8 +84,9 @@ func (cli *CLI) ProcessInput(input string) {
 		if cli.dbg.IsPaused() {
 			fmt.Println("HERE")
 			fmt.Println(values)
-			_, err := cli.dbg.GetVariable(values[1])
+			val, err := cli.dbg.GetVariable(values[1])
 			fmt.Println(err)
+			fmt.Println(val)
 		}
 	case "quit":
 		os.Exit(0)

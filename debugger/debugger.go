@@ -144,31 +144,32 @@ func (debugger *Debugger) Step(vcpu uint32) uint64 {
 	return rip
 }
 
-func (debugger *Debugger) GetVariable(name string) ([]byte, error) {
+func (debugger *Debugger) GetVariable(name string) (string, error) {
 	registers := debugger.controller.GetRegisterContext(debugger.domainid, 0)
 	rip, _ := registers.GetRegister("rip")
 	variable, err := debugger.Symbols.GetSymbol(rip, name)
+	fmt.Println("THIS IS A SIZE:", variable.Size())
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	dregs := registers.DWARFRegisters()
 	address := variable.Address(*dregs)
 	fmt.Println("Address", address)
-	// debugger.registers = &regs{}
-	// debugger.registers.registers = registers
-	// p := file.Parser{Input: bytes.NewReader(variable.Location), Regs: debugger.registers}
-	// err = p.Parse()
-	// address, err := p.Result()
-	// if err != nil {
-	// 	return nil, err
-	// }
-	err = debugger.memory.Map(uint64(address), debugger.domainid, 1, 0)
+
+	err = debugger.memory.Map(uint64(address), debugger.domainid, uint32(variable.Size()), 0)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	bytes, err := debugger.memory.Read(uint64(address), 1)
-	fmt.Println("Integer", bytes)
-	return nil, err
+	bytes, err := debugger.memory.Read(uint64(address), uint32(variable.Size()))
+	if err != nil {
+		return "", err
+	}
+	val, err := variable.ParseVal(bytes)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%s = %s", name, val), nil
 }
 
 func (debugger *Debugger) Continue(vcpu uint32) error {

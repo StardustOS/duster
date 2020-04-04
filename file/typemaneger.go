@@ -57,6 +57,60 @@ func (t *TypeDef) Parse(bytes []byte, endianess binary.ByteOrder) (string, error
 	return t.Base.Parse(bytes, endianess)
 }
 
+type Attribute struct {
+	FieldName string
+	Offset    int
+	base      Type
+}
+
+type Struct struct {
+	Name       string
+	attributes []*Attribute
+	needType   map[dwarf.Offset]*Attribute
+}
+
+func (s *Struct) AddAtribute(attr *Attribute) {
+	s.attributes = append(s.attributes, attr)
+}
+
+func (s *Struct) AddNeedType(attr *Attribute, offset dwarf.Offset) {
+	if s.needType == nil {
+		s.needType = make(map[dwarf.Offset]*Attribute)
+	}
+	s.needType[offset] = attr
+}
+
+func (s *Struct) AddType(offset dwarf.Offset, t Type) {
+	if attr, ok := s.needType[offset]; ok {
+		attr.base = t
+	}
+}
+
+func (s *Struct) Size() int {
+	size := 0
+	for _, attr := range s.attributes {
+		size += attr.Offset
+	}
+	return size
+}
+
+func (s *Struct) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
+	fmt.Println(len(bytes))
+	str := "{"
+	for _, val := range s.attributes {
+		start := val.Offset
+		end := val.Offset + val.base.Size()
+		attributeData := bytes[start:end]
+		out, err := val.base.Parse(attributeData, endianess)
+		if err != nil {
+			return "", err
+		}
+		str = fmt.Sprintf("%s %s: %s", str, val.FieldName, out)
+	}
+	str = fmt.Sprintf("%s }", str)
+	return str, nil
+}
+
 type BaseType struct {
 	size     int
 	Encoding DType
@@ -176,10 +230,51 @@ func parseTypeDef(entry *dwarf.Entry, manager *TypeManager) (*TypeDef, error) {
 	return typedef, nil
 }
 
+func parseStruct(entry *dwarf.Entry) (*Struct, error) {
+	newStruct := new(Struct)
+	field := entry.AttrField(dwarf.AttrName)
+	if field == nil {
+		return nil, errors.New("no name for struct")
+	}
+	newStruct.Name = field.Val.(string)
+	return newStruct, nil
+}
+
+func parseMember(entry *dwarf.Entry, manager *TypeManager) (*Attribute, error) {
+	newAttribute := new(Attribute)
+	field := entry.AttrField(dwarf.AttrName)
+	if field == nil {
+		return nil, errors.New("No name for attribute")
+	}
+	name := field.Val.(string)
+	newAttribute.FieldName = name
+	field = entry.AttrField(dwarf.AttrType)
+	if field == nil {
+		return nil, errors.New("No type for attribute")
+	}
+	offset := field.Val.(dwarf.Offset)
+	t := manager.getType(offset)
+	if t == nil {
+		manager.currentStruct.AddNeedType(newAttribute, offset)
+		manager.addWaiting(offset, manager.currentStruct)
+	} else {
+		newAttribute.base = t
+	}
+
+	field = entry.AttrField(dwarf.AttrDataMemberLoc)
+	if field == nil {
+		return nil, errors.New("No memeber location")
+	}
+	newAttribute.Offset = int(field.Val.(int64))
+
+	return newAttribute, nil
+}
+
 type TypeManager struct {
-	Endianess  binary.ByteOrder
-	types      map[dwarf.Offset]Type
-	waitingDef map[dwarf.Offset][]Type
+	Endianess     binary.ByteOrder
+	types         map[dwarf.Offset]Type
+	waitingDef    map[dwarf.Offset][]Type
+	currentStruct *Struct
 }
 
 func (manager *TypeManager) addWaiting(offset dwarf.Offset, t Type) {
@@ -194,11 +289,17 @@ func (manager *TypeManager) removeWaitingList(offset dwarf.Offset) {
 	if list, ok := manager.waitingDef[offset]; ok {
 		for _, element := range list {
 			switch element.(type) {
+			default:
+				element = typeToAdd
 			case *TypeDef:
 				t := element.(*TypeDef)
 				t.Base = typeToAdd
+			case *Struct:
+				t := element.(*Struct)
+				t.AddType(offset, typeToAdd)
 			}
 		}
+		delete(manager.waitingDef, offset)
 	}
 }
 
@@ -223,6 +324,7 @@ func (manager *TypeManager) Size(offset dwarf.Offset) int {
 
 func (manager *TypeManager) ParseBytes(offset dwarf.Offset, bytes []byte) (string, error) {
 	t := manager.getType(offset)
+	fmt.Println(t)
 	str, err := t.Parse(bytes, manager.Endianess)
 	return str, err
 }
@@ -247,6 +349,20 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 		}
 		manager.addType(entry.Offset, typedef)
 		added = true
+	case dwarf.TagStructType:
+		newStruct, err := parseStruct(entry)
+		if err != nil {
+			return err
+		}
+		manager.currentStruct = newStruct
+		manager.addType(entry.Offset, newStruct)
+		added = true
+	case dwarf.TagMember:
+		memeber, err := parseMember(entry, manager)
+		if err != nil {
+			return err
+		}
+		manager.currentStruct.AddAtribute(memeber)
 	}
 
 	if added {

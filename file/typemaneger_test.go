@@ -87,9 +87,9 @@ func TestTypedef(t *testing.T) {
 	bytes := make([]byte, 4)
 	val32 := uint32(math.Pow(2, 32)) - 1
 	binary.LittleEndian.PutUint32(bytes, val32)
-	var typedefed = []val {
-		val{offset: 0x0000002d, data: integerBytes, expected: fmt.Sprintf("%d",uint64(val64))}, //Case where only one link
-		val{offset: 0x00000361, data:bytes, expected: fmt.Sprintf("%d", val32)}, //Case where multiple links back to original type
+	var typedefed = []val{
+		val{offset: 0x0000002d, data: integerBytes, expected: fmt.Sprintf("%d", uint64(val64))}, //Case where only one link
+		val{offset: 0x00000361, data: bytes, expected: fmt.Sprintf("%d", val32)},                //Case where multiple links back to original type
 	}
 
 	reader := setup("./testfiles/typedef", t)
@@ -111,4 +111,53 @@ func TestTypedef(t *testing.T) {
 			t.Errorf("Expected %s but got %s", v.expected, str)
 		}
 	}
-} 
+}
+
+func TestStruct(t *testing.T) {
+	intBytes := make([]byte, 4)
+	val32 := uint32(math.Pow(2, 32)) - 1 
+	binary.LittleEndian.PutUint32(intBytes, val32)
+	charBytes := make([]byte, 4)
+	charBytes[0] = byte(255)
+	floatBytes := make([]byte, 4)
+	i := math.Float32bits(1.3)
+	binary.LittleEndian.PutUint32(floatBytes, i)
+	var bytes []byte
+	bytes = append(bytes, intBytes...)
+	bytes = append(bytes, charBytes...)
+	bytes = append(bytes, floatBytes...)
+
+	intBytes64 := make([]byte, 8)
+	val64 := uint64(math.Pow(2, 64)) - 1
+	binary.LittleEndian.PutUint64(intBytes64, val64)
+	charBytes2 := []byte{byte(255)}
+
+	var bytes2 []byte
+	
+	bytes2 = append(bytes2, intBytes64...)
+	bytes2 = append(bytes2, bytes...)
+	bytes2 = append(bytes2, charBytes2...)
+	var tests = []val {
+		val{offset: 0x000002e2, data: bytes, expected: "{ v: -1 c: -1 f: 1.300000 }"},
+		val{offset: 0x00000316, data: bytes2, expected: "{ m: 9223372036854775807 meh: { v: -1 c: -1 f: 1.300000 } b: -1 }"}, 
+	}
+
+	reader := setup("./testfiles/structs", t)
+	var manager TypeManager
+	manager.Endianess = binary.LittleEndian
+	for entry, _ := reader.Next(); entry != nil; entry, _ = reader.Next() {
+		err := manager.ParseDwarfEntry(entry)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+	}
+	for _, v := range tests {
+		str, err := manager.ParseBytes(v.offset, v.data)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		if strings.Compare(str, v.expected) != 0 {
+			t.Errorf("Expected %s but got %s", v.expected, str)
+		}
+	}
+} 	

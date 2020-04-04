@@ -121,7 +121,6 @@ func (s *Struct) Size() int {
 }
 
 func (s *Struct) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
-	fmt.Println(len(bytes))
 	str := "{"
 	for _, val := range s.attributes {
 		start := val.Offset

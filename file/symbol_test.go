@@ -1,7 +1,7 @@
 package file
 
 import (
-	"debug/elf"
+	"encoding/binary"
 	"fmt"
 	"testing"
 )
@@ -23,7 +23,7 @@ var positions = []test{
 		Filename: "testfiles/simple",
 		Positions: []pcPos{
 			pcPos{
-				PC: 0x63a,
+				PC: 0x401126,
 				Variables: []Variable{
 					Variable{Name: "x"},
 					Variable{Name: "y"},
@@ -49,7 +49,7 @@ var positions = []test{
 		Filename: "testfiles/different-scopes",
 		Positions: []pcPos{
 			pcPos{
-				PC: 0x635,
+				PC: 0x401106,
 				Variables: []Variable{
 					Variable{Name: "j"},
 				},
@@ -62,7 +62,7 @@ var positions = []test{
 		Filename: "testfiles/different-scopes",
 		Positions: []pcPos{
 			pcPos{
-				PC: 0x60e,
+				PC: 0x40111a,
 				Variables: []Variable{
 					Variable{Name: "k"},
 					Variable{Name: "i"},
@@ -70,7 +70,7 @@ var positions = []test{
 				},
 			},
 			pcPos{
-				PC: 0x628,
+				PC: 0x401134,
 				Variables: []Variable{
 					Variable{Name: "k"},
 					Variable{Name: "i"},
@@ -79,7 +79,7 @@ var positions = []test{
 				},
 			},
 			pcPos{
-				PC: 0x635,
+				PC: 0x401141,
 				Variables: []Variable{
 					Variable{Name: "k"},
 					Variable{Name: "i"},
@@ -92,7 +92,7 @@ var positions = []test{
 		Filename: "testfiles/variable_data",
 		Positions: []pcPos{
 			pcPos{
-				PC: 0x719,
+				PC: 0x401194,
 				Variables: []Variable{
 					Variable{Name: "clean_a"},
 					Variable{Name: "z"},
@@ -100,14 +100,14 @@ var positions = []test{
 				},
 			},
 			pcPos{
-				PC: 0x6b5,
+				PC: 0x401136,
 				Variables: []Variable{
 					Variable{Name: "i"},
 					Variable{Name: "a"},
 				},
 			},
 			pcPos{
-				PC: 0x701,
+				PC: 0x401189,
 				Variables: []Variable{
 					Variable{Name: "clean_a"},
 					Variable{Name: "z"},
@@ -123,29 +123,29 @@ var positions = []test{
 
 func TestGetSymbol(t *testing.T) {
 	for _, test := range positions {
-		file, err := elf.Open(test.Filename)
-		if err != nil {
-			t.Error(err)
-		}
-		d, err := file.DWARF()
+		parser, err := NewParser(test.Filename, binary.LittleEndian)
 		if err != nil {
 			t.Error(err)
 		}
 		for _, pos := range test.Positions {
 			name := fmt.Sprintf("%s:%d", test.Filename, pos.PC)
 			t.Run(name, func(t *testing.T) {
-				sym := Symbol{Data: d}
+				err := parser.Parse(pos.PC)
+				if err != nil {
+					t.Error(err)
+				}
+				sym := parser.SymbolManager()
 				for _, expected := range pos.Variables {
 					variable, err := sym.GetSymbol(pos.PC, expected.Name)
-
+					fmt.Println(variable)
+					fmt.Println(err)
 					if err != nil && !test.ExpectedError {
 						t.Error(err)
 					} else if test.ExpectedError {
 						if err != test.Err {
 							t.Errorf("Error: expected to get %s not %s", test.Err, err)
 						}
-					}
-					if variable.Name != expected.Name && !test.ExpectedError {
+					} else if variable.Name != expected.Name && !test.ExpectedError {
 						t.Errorf("Expected %+v but got %+v", expected, variable)
 					}
 				}

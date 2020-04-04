@@ -3,11 +3,6 @@
 int y;
 const char* string = "my string";
 static int meh2 = 0;
-// struct k {
-//     int v;
-//     char c;
-//     float f;
-// };
 
 int clean(int val1, int val2) {
     int clean_a = val1 + val2 + y;

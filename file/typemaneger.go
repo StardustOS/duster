@@ -27,14 +27,34 @@ const (
 	EditedString
 	SfixedPointInteger
 	UfixedPointInteger
-	WrongSize ErrorD = 0
+	WrongSize        ErrorD = 0
+	NoAssociatedType ErrorD = 1
 )
 
-type parse func()
+func (e ErrorD) Error() string {
+	switch e {
+	case NoAssociatedType:
+		return "No associated TYpe"
+	}
+	return ""
+}
 
 type Type interface {
 	Size() int
 	Parse([]byte, binary.ByteOrder) (string, error)
+}
+
+type TypeDef struct {
+	Name string
+	Base Type
+}
+
+func (t *TypeDef) Size() int {
+	return t.Base.Size()
+}
+
+func (t *TypeDef) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
+	return t.Base.Parse(bytes, endianess)
 }
 
 type BaseType struct {
@@ -50,7 +70,6 @@ func parseInteger(bytes []byte, endianess binary.ByteOrder) int64 {
 	case 1:
 		val := int8(bytes[0])
 		integer = int64(val)
-		fmt.Println("INTEGER", integer)
 	case 2:
 		val := int16(endianess.Uint16(bytes))
 		integer = int64(val)
@@ -134,9 +153,53 @@ func parseBaseEntry(entry *dwarf.Entry) (*BaseType, error) {
 	return base, nil
 }
 
+func parseTypeDef(entry *dwarf.Entry, manager *TypeManager) (*TypeDef, error) {
+	typedef := new(TypeDef)
+	field := entry.AttrField(dwarf.AttrName)
+	if field == nil {
+		return nil, errors.New("No attrName")
+	}
+	typedef.Name = field.Val.(string)
+
+	field = entry.AttrField(dwarf.AttrType)
+	if field == nil {
+		fmt.Printf("%+v\n", entry)
+		return nil, NoAssociatedType
+	}
+	offset := field.Val.(dwarf.Offset)
+	t := manager.getType(offset)
+	if t == nil {
+		manager.addWaiting(offset, typedef)
+	} else {
+		typedef.Base = t
+	}
+	return typedef, nil
+}
+
 type TypeManager struct {
-	Endianess binary.ByteOrder
-	types     map[dwarf.Offset]Type
+	Endianess  binary.ByteOrder
+	types      map[dwarf.Offset]Type
+	waitingDef map[dwarf.Offset][]Type
+}
+
+func (manager *TypeManager) addWaiting(offset dwarf.Offset, t Type) {
+	if manager.waitingDef == nil {
+		manager.waitingDef = make(map[dwarf.Offset][]Type)
+	}
+	manager.waitingDef[offset] = append(manager.waitingDef[offset], t)
+}
+
+func (manager *TypeManager) removeWaitingList(offset dwarf.Offset) {
+	typeToAdd := manager.getType(offset)
+	if list, ok := manager.waitingDef[offset]; ok {
+		for _, element := range list {
+			switch element.(type) {
+			case *TypeDef:
+				t := element.(*TypeDef)
+				t.Base = typeToAdd
+			}
+		}
+	}
 }
 
 func (manager *TypeManager) addType(offset dwarf.Offset, t Type) {
@@ -160,21 +223,34 @@ func (manager *TypeManager) Size(offset dwarf.Offset) int {
 
 func (manager *TypeManager) ParseBytes(offset dwarf.Offset, bytes []byte) (string, error) {
 	t := manager.getType(offset)
-	fmt.Printf("%d\n", offset)
-	fmt.Println(t)
 	str, err := t.Parse(bytes, manager.Endianess)
 	return str, err
 }
 
 func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
+	var added bool
 	switch entry.Tag {
 	case dwarf.TagBaseType:
-		fmt.Printf("%+v\n", entry)
 		base, err := parseBaseEntry(entry)
 		if err != nil {
 			return err
 		}
 		manager.addType(entry.Offset, base)
+		added = true
+	case dwarf.TagTypedef:
+		typedef, err := parseTypeDef(entry, manager)
+		if err != nil {
+			if err == NoAssociatedType {
+				return nil
+			}
+			return err
+		}
+		manager.addType(entry.Offset, typedef)
+		added = true
+	}
+
+	if added {
+		manager.removeWaitingList(entry.Offset)
 	}
 	return nil
 }

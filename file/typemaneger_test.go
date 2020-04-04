@@ -1,4 +1,4 @@
-package file 
+package file
 
 import (
 	"debug/dwarf"
@@ -24,10 +24,11 @@ func setup(filename string, t *testing.T) *dwarf.Reader {
 }
 
 type val struct {
-	offset dwarf.Offset
-	data []byte 
+	offset   dwarf.Offset
+	data     []byte
 	expected string
 }
+
 func TestBasicType(t *testing.T) {
 	integerBytes := make([]byte, 8)
 	val64 := math.Pow(2, 64)
@@ -46,11 +47,11 @@ func TestBasicType(t *testing.T) {
 	float64Bytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(float64Bytes, k)
 
-	var basicTypes = []val {
-		val{offset: 0x00000039, data: integerBytes, expected:fmt.Sprintf("%d", uint64(val64))},
+	var basicTypes = []val{
+		val{offset: 0x00000039, data: integerBytes, expected: fmt.Sprintf("%d", uint64(val64))},
 		val{offset: 0x00000040, data: fourBytes, expected: fmt.Sprintf("%d", uint32(val32))},
 		val{offset: 0x00000065, data: neg, expected: "-1"},
-		val{offset: 0x00000049, data:[]byte{byte(255)}, expected: "255"},
+		val{offset: 0x00000049, data: []byte{byte(255)}, expected: "255"},
 		val{offset: 0x00000091, data: []byte{byte(255)}, expected: "-1"},
 		val{offset: 0x0000035b, data: []byte{byte(1)}, expected: "true"},
 		val{offset: 0x0000035b, data: []byte{byte(0)}, expected: "false"},
@@ -77,3 +78,37 @@ func TestBasicType(t *testing.T) {
 		}
 	}
 }
+
+func TestTypedef(t *testing.T) {
+	integerBytes := make([]byte, 8)
+	val64 := math.Pow(2, 64)
+	binary.LittleEndian.PutUint64(integerBytes, uint64(val64))
+
+	bytes := make([]byte, 4)
+	val32 := uint32(math.Pow(2, 32)) - 1
+	binary.LittleEndian.PutUint32(bytes, val32)
+	var typedefed = []val {
+		val{offset: 0x0000002d, data: integerBytes, expected: fmt.Sprintf("%d",uint64(val64))}, //Case where only one link
+		val{offset: 0x00000361, data:bytes, expected: fmt.Sprintf("%d", val32)}, //Case where multiple links back to original type
+	}
+
+	reader := setup("./testfiles/typedef", t)
+	var manager TypeManager
+	manager.Endianess = binary.LittleEndian
+	for entry, _ := reader.Next(); entry != nil; entry, _ = reader.Next() {
+		err := manager.ParseDwarfEntry(entry)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+	}
+
+	for _, v := range typedefed {
+		str, err := manager.ParseBytes(v.offset, v.data)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		if strings.Compare(str, v.expected) != 0 {
+			t.Errorf("Expected %s but got %s", v.expected, str)
+		}
+	}
+} 

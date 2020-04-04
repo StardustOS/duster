@@ -115,7 +115,7 @@ func TestTypedef(t *testing.T) {
 
 func TestStruct(t *testing.T) {
 	intBytes := make([]byte, 4)
-	val32 := uint32(math.Pow(2, 32)) - 1 
+	val32 := uint32(math.Pow(2, 32)) - 1
 	binary.LittleEndian.PutUint32(intBytes, val32)
 	charBytes := make([]byte, 4)
 	charBytes[0] = byte(255)
@@ -133,13 +133,13 @@ func TestStruct(t *testing.T) {
 	charBytes2 := []byte{byte(255)}
 
 	var bytes2 []byte
-	
+
 	bytes2 = append(bytes2, intBytes64...)
 	bytes2 = append(bytes2, bytes...)
 	bytes2 = append(bytes2, charBytes2...)
-	var tests = []val {
+	var tests = []val{
 		val{offset: 0x000002e2, data: bytes, expected: "{ v: -1 c: -1 f: 1.300000 }"},
-		val{offset: 0x00000316, data: bytes2, expected: "{ m: 9223372036854775807 meh: { v: -1 c: -1 f: 1.300000 } b: -1 }"}, 
+		val{offset: 0x00000316, data: bytes2, expected: "{ m: 9223372036854775807 meh: { v: -1 c: -1 f: 1.300000 } b: -1 }"},
 	}
 
 	reader := setup("./testfiles/structs", t)
@@ -160,4 +160,33 @@ func TestStruct(t *testing.T) {
 			t.Errorf("Expected %s but got %s", v.expected, str)
 		}
 	}
-} 	
+}
+
+func TestPointer(t *testing.T) {
+	pointer := make([]byte, 8)
+	binary.LittleEndian.PutUint32(pointer, 0x10294)
+	var tests = []val {
+		val{offset: 0x00000345, data: pointer, expected: "(int*) 0x10294"},
+		val{offset: 0x0000034b, data: pointer, expected: "(k*) 0x10294"},
+	}
+
+	reader := setup("./testfiles/pointer", t)
+	var manager TypeManager
+	manager.Endianess = binary.LittleEndian
+	for entry, _ := reader.Next(); entry != nil; entry, _ = reader.Next() {
+		err := manager.ParseDwarfEntry(entry)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+	}
+	for _, v := range tests {
+		str, err := manager.ParseBytes(v.offset, v.data)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		if strings.Compare(str, v.expected) != 0 {
+			t.Errorf("Expected %s but got %s", v.expected, str)
+		}
+	}
+
+} 

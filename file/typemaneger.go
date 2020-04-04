@@ -44,6 +44,32 @@ type Type interface {
 	Parse([]byte, binary.ByteOrder) (string, error)
 }
 
+type Pointer struct {
+	size          int
+	typeOfPointer Type
+}
+
+func (p *Pointer) Size() int {
+	return p.size
+}
+
+func (p *Pointer) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
+	address := parseUinteger(bytes, endianess)
+	var name string
+	switch p.typeOfPointer.(type) {
+	case *BaseType:
+		val := p.typeOfPointer.(*BaseType)
+		name = val.Name
+	case *Struct:
+		val := p.typeOfPointer.(*Struct)
+		name = val.Name
+	case *TypeDef:
+		val := p.typeOfPointer.(*TypeDef)
+		name = val.Name
+	}
+	return fmt.Sprintf("(%s*) 0x%x", name, address), nil
+}
+
 type TypeDef struct {
 	Name string
 	Base Type
@@ -270,6 +296,28 @@ func parseMember(entry *dwarf.Entry, manager *TypeManager) (*Attribute, error) {
 	return newAttribute, nil
 }
 
+func parsePointer(entry *dwarf.Entry, manager *TypeManager) (*Pointer, error) {
+	pointer := new(Pointer)
+	field := entry.AttrField(dwarf.AttrByteSize)
+	if field == nil {
+		return nil, errors.New("No byte size attribute")
+	}
+	pointer.size = int(field.Val.(int64))
+	field = entry.AttrField(dwarf.AttrType)
+	if field == nil {
+		fmt.Println(entry)
+		return nil, NoAssociatedType
+	}
+	offset := field.Val.(dwarf.Offset)
+	t := manager.getType(offset)
+	if t == nil {
+		manager.addWaiting(offset, pointer)
+	} else {
+		pointer.typeOfPointer = t
+	}
+	return pointer, nil
+}
+
 type TypeManager struct {
 	Endianess     binary.ByteOrder
 	types         map[dwarf.Offset]Type
@@ -297,6 +345,9 @@ func (manager *TypeManager) removeWaitingList(offset dwarf.Offset) {
 			case *Struct:
 				t := element.(*Struct)
 				t.AddType(offset, typeToAdd)
+			case *Pointer:
+				t := element.(*Pointer)
+				t.typeOfPointer = typeToAdd
 			}
 		}
 		delete(manager.waitingDef, offset)
@@ -363,6 +414,16 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 			return err
 		}
 		manager.currentStruct.AddAtribute(memeber)
+	case dwarf.TagPointerType:
+		pointer, err := parsePointer(entry, manager)
+		if err != nil {
+			if err == NoAssociatedType {
+				return nil
+			}
+			return err
+		}
+		manager.addType(entry.Offset, pointer)
+		added = true
 	}
 
 	if added {

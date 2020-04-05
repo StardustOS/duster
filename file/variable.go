@@ -17,5 +17,5 @@ func (variable *Variable) Size() int {
 }
 
 func (variable *Variable) Location() []byte {
-	return variable.Location()
+	return variable.location
 }

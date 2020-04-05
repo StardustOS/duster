@@ -3,7 +3,6 @@ package file
 import (
 	"debug/dwarf"
 	"errors"
-	"fmt"
 )
 
 type SymbolError int
@@ -12,6 +11,7 @@ const (
 	InvalidDWARF   SymbolError = 0
 	SymbolNotFound SymbolError = 1
 	NoLoctionFound SymbolError = 2
+	NoName SymbolError = 3
 )
 
 func (err SymbolError) Error() string {
@@ -66,7 +66,6 @@ func (sym *SymbolTable) Lookup(symbolName string) (*Variable, error) {
 }
 
 func (sym *SymbolTable) AddVariable(variable *Variable) {
-	fmt.Println(sym)
 	if sym.symbols == nil {
 		sym.symbols = make(map[string]*Variable)
 	}
@@ -81,7 +80,7 @@ func parseVariable(entry *dwarf.Entry, manager *TypeManager) (*Variable, error) 
 	field := entry.AttrField(dwarf.AttrName)
 	variable := new(Variable)
 	if field == nil {
-		return nil, errors.New("Error: could not find variable")
+		return nil, NoName
 	}
 	name := field.Val.(string)
 	variable.Name = name
@@ -116,7 +115,7 @@ func (manager *SymbolManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 	case dwarf.TagVariable:
 		variable, err := parseVariable(entry, manager.typemanager)
 		if err != nil {
-			if err == NoLoctionFound {
+			if err == NoLoctionFound || err == NoName {
 				return nil
 			}
 			return err

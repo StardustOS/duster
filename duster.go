@@ -15,7 +15,6 @@ func main() {
 	flag.StringVar(&filename, "path", "que", "Path to the os's binary")
 	flag.IntVar(&domainid, "id", -1, "The domain id to connect")
 	flag.Parse()
-	fmt.Println(filename)
 
 	err := cmd.Init(uint32(domainid), filename)
 	if err != nil {
@@ -23,7 +22,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("Welcome to the ziggy debugger!")
+	fmt.Println("Welcome to Duster!")
 	for {
 		input := cmd.ReadInput()
 		cmd.ProcessInput(input)

@@ -29,12 +29,15 @@ const (
 	UfixedPointInteger
 	WrongSize        ErrorD = 0
 	NoAssociatedType ErrorD = 1
+	AnnoymousStruct ErrorD = 2
 )
 
 func (e ErrorD) Error() string {
 	switch e {
 	case NoAssociatedType:
 		return "No associated TYpe"
+	case AnnoymousStruct:
+		return "Annoymous struct"
 	}
 	return ""
 }
@@ -242,7 +245,7 @@ func parseTypeDef(entry *dwarf.Entry, manager *TypeManager) (*TypeDef, error) {
 
 	field = entry.AttrField(dwarf.AttrType)
 	if field == nil {
-		fmt.Printf("%+v\n", entry)
+		//fmt.Printf("%+v\n", entry)
 		return nil, NoAssociatedType
 	}
 	offset := field.Val.(dwarf.Offset)
@@ -259,7 +262,7 @@ func parseStruct(entry *dwarf.Entry) (*Struct, error) {
 	newStruct := new(Struct)
 	field := entry.AttrField(dwarf.AttrName)
 	if field == nil {
-		return nil, errors.New("no name for struct")
+		return nil, AnnoymousStruct
 	}
 	newStruct.Name = field.Val.(string)
 	return newStruct, nil
@@ -269,7 +272,7 @@ func parseMember(entry *dwarf.Entry, manager *TypeManager) (*Attribute, error) {
 	newAttribute := new(Attribute)
 	field := entry.AttrField(dwarf.AttrName)
 	if field == nil {
-		return nil, errors.New("No name for attribute")
+		return nil, nil//errors.New("No name for attribute")
 	}
 	name := field.Val.(string)
 	newAttribute.FieldName = name
@@ -288,7 +291,7 @@ func parseMember(entry *dwarf.Entry, manager *TypeManager) (*Attribute, error) {
 
 	field = entry.AttrField(dwarf.AttrDataMemberLoc)
 	if field == nil {
-		return nil, errors.New("No memeber location")
+		return nil, nil //errors.New("No memeber location")
 	}
 	newAttribute.Offset = int(field.Val.(int64))
 
@@ -304,7 +307,7 @@ func parsePointer(entry *dwarf.Entry, manager *TypeManager) (*Pointer, error) {
 	pointer.size = int(field.Val.(int64))
 	field = entry.AttrField(dwarf.AttrType)
 	if field == nil {
-		fmt.Println(entry)
+		///fmt.Println(entry)
 		return nil, NoAssociatedType
 	}
 	offset := field.Val.(dwarf.Offset)
@@ -374,7 +377,6 @@ func (manager *TypeManager) Size(offset dwarf.Offset) int {
 
 func (manager *TypeManager) ParseBytes(offset dwarf.Offset, bytes []byte) (string, error) {
 	t := manager.getType(offset)
-	fmt.Println(t)
 	str, err := t.Parse(bytes, manager.Endianess)
 	return str, err
 }
@@ -402,6 +404,9 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 	case dwarf.TagStructType:
 		newStruct, err := parseStruct(entry)
 		if err != nil {
+			if err == AnnoymousStruct {
+				return nil 
+			}
 			return err
 		}
 		manager.currentStruct = newStruct

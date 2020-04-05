@@ -6,9 +6,11 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"encoding/binary"
 
 	"github.com/AtomicMalloc/debugger/file"
 	"github.com/AtomicMalloc/debugger/xen"
+	"github.com/go-delve/delve/pkg/dwarf/op"
 )
 
 const (
@@ -39,7 +41,7 @@ type Debugger struct {
 	registers    *regs
 	fileHandler  file.File
 	insinglestep bool
-	Symbols      file.Symbol
+	parser      *file.Parser
 }
 
 //Init must be run before any of the other methods
@@ -70,8 +72,12 @@ func (debugger *Debugger) Init(domainid uint32, name string) error {
 	if err != nil {
 		return err
 	}
-	err = debugger.Symbols.Init(name)
-	return err
+	p, err := file.NewParser(name, binary.LittleEndian)
+	if err != nil {
+		return err
+	}
+	debugger.parser = p
+	return nil
 }
 
 func (debugger *Debugger) StartSingle(vcpu uint32, start bool) error {
@@ -139,22 +145,35 @@ func (debugger *Debugger) Step(vcpu uint32) uint64 {
 	if _, ok := debugger.breakpoints[previousRIP]; ok {
 		debugger.memory.Write(previousRIP, 1, []byte{breakInt})
 	}
-	debugger.registers.registers = registers
-	debugger.rip = rip
 	return rip
+}
+
+func getAddress(variable *file.Variable, regs *op.DwarfRegisters) (uint64, uint64, bool) {
+	a, piece, _ := op.ExecuteStackProgram(*regs, variable.Location())
+	if piece == nil {
+		return uint64(a), 0, true
+	}
+	return 0, 0, false
 }
 
 func (debugger *Debugger) GetVariable(name string) (string, error) {
 	registers := debugger.controller.GetRegisterContext(debugger.domainid, 0)
-	rip, _ := registers.GetRegister("rip")
-	variable, err := debugger.Symbols.GetSymbol(rip, name)
-	fmt.Println("THIS IS A SIZE:", variable.Size())
+	rip, err := registers.GetRegister("rip")
 	if err != nil {
 		return "", err
 	}
+	err = debugger.parser.Parse(rip)
+	if err != nil {
+		return "", err
+	}
+	symbol := debugger.parser.SymbolManager()
+	variable, err := symbol.GetSymbol(rip, name)
+	if err != nil {
+		return "", err
+	}
+
 	dregs := registers.DWARFRegisters()
-	address := variable.Address(*dregs)
-	fmt.Println("Address", address)
+	address, _, _ := getAddress(variable, dregs) 
 
 	err = debugger.memory.Map(uint64(address), debugger.domainid, uint32(variable.Size()), 0)
 	if err != nil {
@@ -164,7 +183,7 @@ func (debugger *Debugger) GetVariable(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	val, err := variable.ParseVal(bytes)
+	val, err := variable.Parse(bytes, binary.LittleEndian)
 	if err != nil {
 		return "", err
 	}
@@ -183,11 +202,8 @@ func (debugger *Debugger) Continue(vcpu uint32) error {
 }
 
 func (debugger *Debugger) SetBreakpoint(filename string, line int, vcpu uint32) error {
-	fmt.Println("Filename", filename)
-	fmt.Println("line", line)
 	debugger.controller.Pause(debugger.domainid)
 	address := debugger.fileHandler.GetAddress(filename, line)
-	fmt.Println("address", address)
 	err := debugger.memory.Map(address, debugger.domainid, 1, vcpu)
 	if err != nil {
 		return err

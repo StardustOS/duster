@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 )
 
-type parser struct {
+type Parser struct {
 	data      *dwarf.Data
 	types     *TypeManager
 	symbols   *SymbolManager
@@ -14,7 +14,7 @@ type parser struct {
 	endianess binary.ByteOrder
 }
 
-func (p *parser) parseTypes(reader *dwarf.Reader) error {
+func (p *Parser) parseTypes(reader *dwarf.Reader) error {
 	p.types = new(TypeManager)
 	p.types.Endianess = p.endianess
 	for entry, err := reader.Next(); entry != nil; entry, err = reader.Next() {
@@ -29,7 +29,7 @@ func (p *parser) parseTypes(reader *dwarf.Reader) error {
 	return nil
 }
 
-func (p *parser) parseVariables(reader *dwarf.Reader) error {
+func (p *Parser) parseVariables(reader *dwarf.Reader) error {
 	p.symbols = new(SymbolManager)
 	p.symbols.typemanager = p.types
 	for entry, err := reader.Next(); entry != nil; entry, err = reader.Next() {
@@ -44,7 +44,7 @@ func (p *parser) parseVariables(reader *dwarf.Reader) error {
 	return nil
 }
 
-func (p *parser) Parse(pc uint64) error {
+func (p *Parser) Parse(pc uint64) error {
 	reader := p.data.Reader()
 	entry, err := reader.SeekPC(pc)
 	if err != nil {
@@ -64,11 +64,11 @@ func (p *parser) Parse(pc uint64) error {
 	return err
 }
 
-func (p *parser) SymbolManager() *SymbolManager {
+func (p *Parser) SymbolManager() *SymbolManager {
 	return p.symbols
 }
 
-func NewParser(filename string, endianess binary.ByteOrder) (*parser, error) {
+func NewParser(filename string, endianess binary.ByteOrder) (*Parser, error) {
 	file, err := elf.Open(filename)
 	if err != nil {
 		return nil, err
@@ -77,7 +77,7 @@ func NewParser(filename string, endianess binary.ByteOrder) (*parser, error) {
 	if err != nil {
 		return nil, err
 	}
-	newParse := new(parser)
+	newParse := new(Parser)
 	newParse.data = d
 	newParse.endianess = endianess
 	return newParse, nil

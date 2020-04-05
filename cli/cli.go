@@ -82,11 +82,12 @@ func (cli *CLI) ProcessInput(input string) {
 		}
 	case "read":
 		if cli.dbg.IsPaused() {
-			fmt.Println("HERE")
-			fmt.Println(values)
 			val, err := cli.dbg.GetVariable(values[1])
-			fmt.Println(err)
-			fmt.Println(val)
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				fmt.Println(val)
+			}
 		}
 	case "quit":
 		os.Exit(0)

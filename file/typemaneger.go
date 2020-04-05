@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 )
 
 type DType uint
@@ -29,7 +30,8 @@ const (
 	UfixedPointInteger
 	WrongSize        ErrorD = 0
 	NoAssociatedType ErrorD = 1
-	AnnoymousStruct ErrorD = 2
+	AnnoymousStruct  ErrorD = 2
+	NoBoundary       ErrorD = 3
 )
 
 func (e ErrorD) Error() string {
@@ -45,6 +47,30 @@ func (e ErrorD) Error() string {
 type Type interface {
 	Size() int
 	Parse([]byte, binary.ByteOrder) (string, error)
+}
+
+type Array struct {
+	typeArray Type
+	noElement int
+}
+
+func (arr *Array) Size() int {
+	return arr.noElement * arr.typeArray.Size()
+}
+
+func (arr *Array) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
+	str := ""
+	for start := 0; start < len(bytes); start += arr.typeArray.Size() {
+		end := start + arr.typeArray.Size()
+		element := bytes[start:end]
+		strElement, err := arr.typeArray.Parse(element, endianess)
+		if err != nil {
+			return "", err
+		}
+		str = fmt.Sprintf("%s%s ", str, strElement)
+	}
+	str = strings.TrimSpace(str)
+	return str, nil
 }
 
 type Pointer struct {
@@ -71,6 +97,32 @@ func (p *Pointer) Parse(bytes []byte, endianess binary.ByteOrder) (string, error
 		name = val.Name
 	}
 	return fmt.Sprintf("(%s*) 0x%x", name, address), nil
+}
+
+func parseArrayEntry(entry *dwarf.Entry, manager *TypeManager) (*Array, error) {
+	arr := new(Array)
+	field := entry.AttrField(dwarf.AttrType)
+	if field == nil {
+		return nil, errors.New("No type")
+	}
+	offset := field.Val.(dwarf.Offset)
+	t := manager.getType(offset)
+	if t == nil {
+		manager.addWaiting(offset, arr)
+	} else {
+		arr.typeArray = t
+	}
+	return arr, nil
+}
+
+func parseArrayRange(entry *dwarf.Entry, arr *Array) error {
+	field := entry.AttrField(dwarf.AttrUpperBound)
+	if field == nil {
+		return NoBoundary
+	}
+	upperBound := int(field.Val.(int64))
+	arr.noElement = upperBound
+	return nil
 }
 
 type TypeDef struct {
@@ -272,7 +324,7 @@ func parseMember(entry *dwarf.Entry, manager *TypeManager) (*Attribute, error) {
 	newAttribute := new(Attribute)
 	field := entry.AttrField(dwarf.AttrName)
 	if field == nil {
-		return nil, nil//errors.New("No name for attribute")
+		return nil, nil //errors.New("No name for attribute")
 	}
 	name := field.Val.(string)
 	newAttribute.FieldName = name
@@ -325,6 +377,7 @@ type TypeManager struct {
 	types         map[dwarf.Offset]Type
 	waitingDef    map[dwarf.Offset][]Type
 	currentStruct *Struct
+	currentArray  *Array
 }
 
 func (manager *TypeManager) addWaiting(offset dwarf.Offset, t Type) {
@@ -350,6 +403,9 @@ func (manager *TypeManager) removeWaitingList(offset dwarf.Offset) {
 			case *Pointer:
 				t := element.(*Pointer)
 				t.typeOfPointer = typeToAdd
+			case *Array:
+				t := element.(*Array)
+				t.typeArray = typeToAdd
 			}
 		}
 		delete(manager.waitingDef, offset)
@@ -405,7 +461,7 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 		newStruct, err := parseStruct(entry)
 		if err != nil {
 			if err == AnnoymousStruct {
-				return nil 
+				return nil
 			}
 			return err
 		}
@@ -428,6 +484,22 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 		}
 		manager.addType(entry.Offset, pointer)
 		added = true
+	case dwarf.TagArrayType:
+		arr, err := parseArrayEntry(entry, manager)
+		if err != nil {
+			return err
+		}
+		manager.addType(entry.Offset, arr)
+		added = true
+		manager.currentArray = arr
+	case dwarf.TagSubrangeType:
+		if manager.currentArray == nil {
+			return nil
+		}
+		err := parseArrayRange(entry, manager.currentArray)
+		if err != nil && err != NoBoundary {
+			return err
+		}
 	}
 
 	if added {

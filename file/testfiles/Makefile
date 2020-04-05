@@ -1,5 +1,5 @@
 
-all: test variable_data simple globalvars different-scopes structs basicType typedef pointer
+all: test variable_data simple globalvars different-scopes structs basicType typedef pointer arrays
 
 test: test.c
 	gcc -g -O0 test.c -o test
@@ -27,6 +27,9 @@ typedef: typedef.c
 
 pointer: pointer.c
 	gcc -g -O0 pointer.c -o pointer
+
+arrays: arrays.c
+	gcc -g -O0 arrays.c -o arrays
 
 clean:
 	rm test

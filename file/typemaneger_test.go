@@ -165,7 +165,7 @@ func TestStruct(t *testing.T) {
 func TestPointer(t *testing.T) {
 	pointer := make([]byte, 8)
 	binary.LittleEndian.PutUint32(pointer, 0x10294)
-	var tests = []val {
+	var tests = []val{
 		val{offset: 0x00000345, data: pointer, expected: "(int*) 0x10294"},
 		val{offset: 0x0000034b, data: pointer, expected: "(k*) 0x10294"},
 	}
@@ -189,4 +189,34 @@ func TestPointer(t *testing.T) {
 		}
 	}
 
-} 
+}
+
+func TestArray(t *testing.T) {
+	expected := "Hola el mundo"
+	array := []byte(expected)
+	e := fmt.Sprintf("%v", array)
+	expected = e[1 : len(e)-1]
+	var tests = []val{
+		val{offset: 0x00000354, data: array, expected: expected},
+	}
+
+	reader := setup("./testfiles/arrays", t)
+	var manager TypeManager
+	manager.Endianess = binary.LittleEndian
+	for entry, _ := reader.Next(); entry != nil; entry, _ = reader.Next() {
+		err := manager.ParseDwarfEntry(entry)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+	}
+	for _, v := range tests {
+		str, err := manager.ParseBytes(v.offset, v.data)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		if strings.Compare(str, v.expected) != 0 {
+			t.Errorf("Expected %s but got %s", v.expected, str)
+		}
+	}
+
+}

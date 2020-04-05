@@ -11,7 +11,7 @@ const (
 	InvalidDWARF   SymbolError = 0
 	SymbolNotFound SymbolError = 1
 	NoLoctionFound SymbolError = 2
-	NoName SymbolError = 3
+	NoName         SymbolError = 3
 )
 
 func (err SymbolError) Error() string {
@@ -112,7 +112,7 @@ func (manager *SymbolManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 	}
 
 	switch entry.Tag {
-	case dwarf.TagVariable:
+	case dwarf.TagVariable, dwarf.TagFormalParameter:
 		variable, err := parseVariable(entry, manager.typemanager)
 		if err != nil {
 			if err == NoLoctionFound || err == NoName {

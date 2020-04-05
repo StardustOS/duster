@@ -119,6 +119,19 @@ var positions = []test{
 		ExpectedError: true,
 		Err:           SymbolNotFound,
 	},
+	test{
+		Filename: "testfiles/variable_data",
+		Positions: []pcPos{
+			pcPos{
+				PC: 0x401136,
+				Variables: []Variable{
+					Variable{Name: "clean_a"},
+					Variable{Name: "val1"},
+					Variable{Name: "val2"},
+				},
+			},
+		},
+	},
 }
 
 func TestGetSymbol(t *testing.T) {

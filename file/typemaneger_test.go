@@ -197,7 +197,7 @@ func TestArray(t *testing.T) {
 	e := fmt.Sprintf("%v", array)
 	expected = e[1 : len(e)-1]
 	var tests = []val{
-		val{offset: 0x00000354, data: array, expected: expected},
+		val{offset: 0x00000333, data: array, expected: expected},
 	}
 
 	reader := setup("./testfiles/arrays", t)
@@ -216,6 +216,29 @@ func TestArray(t *testing.T) {
 		}
 		if strings.Compare(str, v.expected) != 0 {
 			t.Errorf("Expected %s but got %s", v.expected, str)
+		}
+	}
+
+}
+
+func TestDynamicArray(t *testing.T) {
+	var tests = []val{
+		val{offset: 0x00000341},
+	}
+
+	reader := setup("./testfiles/dynamic-array", t)
+	var manager TypeManager
+	manager.Endianess = binary.LittleEndian
+	for entry, _ := reader.Next(); entry != nil; entry, _ = reader.Next() {
+		err := manager.ParseDwarfEntry(entry)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+	}
+	for _, v := range tests {
+		_, err := manager.ParseBytes(v.offset, v.data)
+		if err != NeedParseLoction {
+			t.Fatalf("Need to returns error (we don't know the size of the data)")
 		}
 	}
 

@@ -32,6 +32,7 @@ const (
 	NoAssociatedType ErrorD = 1
 	AnnoymousStruct  ErrorD = 2
 	NoBoundary       ErrorD = 3
+	NeedParseLoction ErrorD = 4
 )
 
 func (e ErrorD) Error() string {
@@ -52,6 +53,7 @@ type Type interface {
 type Array struct {
 	typeArray Type
 	noElement int
+	Location  []byte
 }
 
 func (arr *Array) Size() int {
@@ -59,6 +61,9 @@ func (arr *Array) Size() int {
 }
 
 func (arr *Array) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
+	if arr.Location != nil {
+		return "", NeedParseLoction
+	}
 	str := ""
 	for start := 0; start < len(bytes); start += arr.typeArray.Size() {
 		end := start + arr.typeArray.Size()
@@ -120,8 +125,13 @@ func parseArrayRange(entry *dwarf.Entry, arr *Array) error {
 	if field == nil {
 		return NoBoundary
 	}
-	upperBound := int(field.Val.(int64))
-	arr.noElement = upperBound
+	upperBound, ok := field.Val.(int64)
+	if ok {
+		arr.noElement = int(upperBound)
+	} else {
+		location := field.Val.([]byte)
+		arr.Location = location
+	}
 	return nil
 }
 

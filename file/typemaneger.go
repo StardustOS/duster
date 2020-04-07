@@ -57,7 +57,7 @@ type Array struct {
 }
 
 func (arr *Array) Size() int {
-	return arr.noElement * arr.typeArray.Size()
+	return arr.noElement * (arr.typeArray.Size() + 1)
 }
 
 func (arr *Array) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {

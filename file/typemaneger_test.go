@@ -243,3 +243,32 @@ func TestDynamicArray(t *testing.T) {
 	}
 
 }
+
+
+func TestRecusriveStruct(t *testing.T) {
+	p1 := make([]byte, 8)
+	p2 := make([]byte, 8)
+
+	binary.LittleEndian.PutUint64(p1, 0x10294)
+	binary.LittleEndian.PutUint64(p2, 0x102945)
+	data := append(p1, p2...)
+	var tests = []val {
+		val{offset: 0x000002ff, data: data, expected: "{ next: (list_head*) 0x10294 prev: (list_head*) 0x102945 }"},
+	}
+	reader := setup("./testfiles/recursive_struct", t)
+	var manager TypeManager
+	manager.Endianess = binary.LittleEndian
+	for entry, _ := reader.Next(); entry != nil; entry, _ = reader.Next() {
+		err := manager.ParseDwarfEntry(entry)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+	}
+	for _, v := range tests {
+		str, _ := manager.ParseBytes(v.offset, v.data)
+		if strings.Compare(str, v.expected) != 0 {
+			t.Errorf("Expected %s but got %s", str, v.expected)
+		}
+	}
+
+}

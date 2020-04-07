@@ -33,6 +33,8 @@ func (cli *CLI) Init(domaind uint32, filename string) error {
 		prompt.Suggest{Text: "continue", Description: "Continue to the next breakpoint"},
 		prompt.Suggest{Text: "quit", Description: "Exit the debugger"},
 		prompt.Suggest{Text: "read", Description: "Read a variable"},
+		prompt.Suggest{Text: "def", Description: "Deference a variable"},
+		prompt.Suggest{Text: "remove", Description: "Remove breakpoint"},
 	}
 	cli.dbg = debugger.Debugger{}
 	err := cli.dbg.Init(domaind, filename)
@@ -87,6 +89,37 @@ func (cli *CLI) ProcessInput(input string) {
 				fmt.Println(err)
 			} else {
 				fmt.Println(val)
+			}
+		}
+	case "def":
+		if cli.dbg.IsPaused() {
+			val, err := cli.dbg.Deference(0, values[1])
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				fmt.Println(val)
+			}
+		}
+	case "remove":
+		if cli.dbg.IsPaused() {
+			if len(values) != 2 {
+				fmt.Println("Error: too many arguments for break (expected argument in the form file.c:<line no>)")
+				return
+			}
+			args := strings.Split(values[1], ":")
+			if len(args) != 2 {
+				fmt.Println("Error: argument in the wrong format (expected file.c:<line no>)")
+			}
+			lineNo, err := strconv.Atoi(args[1])
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			err = cli.dbg.RemoveBreakpoint(args[0], lineNo, 0)
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				fmt.Printf("Removed breakpoint at %s:%d\n", args[0], lineNo)
 			}
 		}
 	case "quit":

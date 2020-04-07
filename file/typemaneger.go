@@ -81,6 +81,7 @@ func (arr *Array) Parse(bytes []byte, endianess binary.ByteOrder) (string, error
 type Pointer struct {
 	size          int
 	typeOfPointer Type
+	address uint64
 }
 
 func (p *Pointer) Size() int {
@@ -91,6 +92,8 @@ func (p *Pointer) Parse(bytes []byte, endianess binary.ByteOrder) (string, error
 	address := parseUinteger(bytes, endianess)
 	var name string
 	switch p.typeOfPointer.(type) {
+	default:
+		name = "void"
 	case *BaseType:
 		val := p.typeOfPointer.(*BaseType)
 		name = val.Name
@@ -101,7 +104,16 @@ func (p *Pointer) Parse(bytes []byte, endianess binary.ByteOrder) (string, error
 		val := p.typeOfPointer.(*TypeDef)
 		name = val.Name
 	}
+	p.address = address
 	return fmt.Sprintf("(%s*) 0x%x", name, address), nil
+}
+
+func (p *Pointer) Type() Type {
+	return p.typeOfPointer
+}
+
+func (p *Pointer) Address() uint64 {
+	return p.address
 }
 
 func parseArrayEntry(entry *dwarf.Entry, manager *TypeManager) (*Array, error) {
@@ -157,7 +169,7 @@ type Attribute struct {
 type Struct struct {
 	Name       string
 	attributes []*Attribute
-	needType   map[dwarf.Offset]*Attribute
+	needType   map[dwarf.Offset][]*Attribute
 }
 
 func (s *Struct) AddAtribute(attr *Attribute) {
@@ -166,14 +178,16 @@ func (s *Struct) AddAtribute(attr *Attribute) {
 
 func (s *Struct) AddNeedType(attr *Attribute, offset dwarf.Offset) {
 	if s.needType == nil {
-		s.needType = make(map[dwarf.Offset]*Attribute)
+		s.needType = make(map[dwarf.Offset][]*Attribute)
 	}
-	s.needType[offset] = attr
+	s.needType[offset] = append(s.needType[offset], attr)
 }
 
 func (s *Struct) AddType(offset dwarf.Offset, t Type) {
-	if attr, ok := s.needType[offset]; ok {
-		attr.base = t
+	if attrs, ok := s.needType[offset]; ok {
+		for _, attr := range attrs {
+			attr.base = t
+		}
 	}
 }
 
@@ -186,6 +200,7 @@ func (s *Struct) Size() int {
 }
 
 func (s *Struct) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
+	//p := s.attributes[1].base.(*Pointer)
 	str := "{"
 	for _, val := range s.attributes {
 		start := val.Offset
@@ -370,7 +385,7 @@ func parsePointer(entry *dwarf.Entry, manager *TypeManager) (*Pointer, error) {
 	field = entry.AttrField(dwarf.AttrType)
 	if field == nil {
 		///fmt.Println(entry)
-		return nil, NoAssociatedType
+		return pointer, nil
 	}
 	offset := field.Val.(dwarf.Offset)
 	t := manager.getType(offset)
@@ -487,9 +502,6 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 	case dwarf.TagPointerType:
 		pointer, err := parsePointer(entry, manager)
 		if err != nil {
-			if err == NoAssociatedType {
-				return nil
-			}
 			return err
 		}
 		manager.addType(entry.Offset, pointer)
@@ -512,8 +524,8 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 		}
 	}
 
+	manager.removeWaitingList(entry.Offset)
 	if added {
-		manager.removeWaitingList(entry.Offset)
 	}
 	return nil
 }

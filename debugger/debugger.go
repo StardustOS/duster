@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"encoding/binary"
+	"errors"
 
 	"github.com/AtomicMalloc/debugger/file"
 	"github.com/AtomicMalloc/debugger/xen"
@@ -156,6 +157,29 @@ func getAddress(variable *file.Variable, regs *op.DwarfRegisters) (uint64, uint6
 	return 0, 0, false
 }
 
+func (debugger *Debugger) variableArray(variable *file.Variable, dregs *op.DwarfRegisters) {
+	t := variable.Type()
+	switch t.(type) {
+	default:
+		return
+	case *file.Array:
+		typeOfElement := t.(*file.Array)
+		if typeOfElement.Location == nil {
+			return 
+		}
+		fmt.Println(typeOfElement.Location)
+		address, piece, isAddress := op.ExecuteStackProgram(*dregs, typeOfElement.Location[:2])
+		debugger.memory.Map(uint64(address), debugger.domainid, uint32(8), 0)
+		bytes, err := debugger.memory.Read(uint64(address), uint32(8))
+		fmt.Println(err)
+		startAddress := binary.LittleEndian.Uint64(bytes)
+		fmt.Println(startAddress)
+		fmt.Println("address", address)
+		fmt.Println("piece", piece)
+		fmt.Println("is address", isAddress)
+	}
+}
+
 func (debugger *Debugger) GetVariable(name string) (string, error) {
 	registers := debugger.controller.GetRegisterContext(debugger.domainid, 0)
 	rip, err := registers.GetRegister("rip")
@@ -173,6 +197,8 @@ func (debugger *Debugger) GetVariable(name string) (string, error) {
 	}
 
 	dregs := registers.DWARFRegisters()
+	debugger.variableArray(variable, dregs)
+
 	address, _, _ := getAddress(variable, dregs) 
 
 	err = debugger.memory.Map(uint64(address), debugger.domainid, uint32(variable.Size()), 0)
@@ -191,12 +217,83 @@ func (debugger *Debugger) GetVariable(name string) (string, error) {
 	return fmt.Sprintf("%s = %s", name, val), nil
 }
 
+func (debugger *Debugger) Deference(vcpu uint32, name string) (string, error) {
+	if debugger.controller.IsPaused(debugger.domainid) {
+		registers := debugger.controller.GetRegisterContext(debugger.domainid, 0)
+		rip, err := registers.GetRegister("rip")
+		if err != nil {
+			return "", err
+		}
+		err = debugger.parser.Parse(rip)
+		if err != nil {
+			return "", err
+		}
+		symbol := debugger.parser.SymbolManager()
+		variable, err := symbol.GetSymbol(rip, name)
+		if err != nil {
+			return "", err
+		}
+
+		var pointer *file.Pointer
+		var ok bool
+		if pointer, ok = variable.Type().(*file.Pointer); !ok {
+			return "", errors.New("This is not a pointer")
+		}
+
+		
+		dregs := registers.DWARFRegisters()
+
+		//address of pointer
+		address, _, _ := getAddress(variable, dregs) 
+
+		err = debugger.memory.Map(uint64(address), debugger.domainid, uint32(variable.Size()), 0)
+		if err != nil {
+			return "", err
+		}
+		bytes, err := debugger.memory.Read(uint64(address), uint32(variable.Size()))
+		if err != nil {
+			return "", err
+		}
+
+		
+		address = binary.LittleEndian.Uint64(bytes)
+		str, err := pointer.Parse(bytes, binary.LittleEndian)
+		if err != nil {
+			return "", err
+		}
+		
+		t := pointer.Type()
+
+		err = debugger.memory.Map(uint64(address), debugger.domainid, uint32(t.Size()), 0)
+		if err != nil {
+			return "", err
+		}
+		bytes, err = debugger.memory.Read(uint64(address), uint32(t.Size()))
+		if err != nil {
+			return "", err
+		}
+		str1, err := t.Parse(bytes, binary.LittleEndian)
+		if err != nil {
+			return "", err 
+		}
+		return fmt.Sprintf("%s %s", str, str1), nil
+	}
+	return "Not hit the breakpoint yet", nil 
+}
+
 func (debugger *Debugger) Continue(vcpu uint32) error {
 	if debugger.controller.IsPaused(debugger.domainid) {
 		if debugger.insinglestep {
 			debugger.StartSingle(vcpu, false)
 		}
-		return debugger.controller.UnPause(debugger.domainid)
+		err := debugger.controller.UnPause(debugger.domainid)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Waiting for the next breakpoint!")
+		for !debugger.controller.IsPaused(debugger.domainid) {
+
+		}
 	}
 	return nil
 }
@@ -219,15 +316,15 @@ func (debugger *Debugger) SetBreakpoint(filename string, line int, vcpu uint32) 
 	return nil
 }
 
-// func (debugger *Debugger) RemoveBreakpoint(filename string, line int, vcpu uint32) error {
-// 	address := debugger.fileHandler.GetAddress(filename, line)
-// 	if val, ok := debugger.breakpoints[address]; ok {
-// 		delete(debugger.breakpoints, address)
-// 		err := memory.Write(address, 1, []byte{val})
-// 		return err
-// 	}
-// 	return nil
-// }
+func (debugger *Debugger) RemoveBreakpoint(filename string, line int, vcpu uint32) error {
+	address := debugger.fileHandler.GetAddress(filename, line)
+	if val, ok := debugger.breakpoints[address]; ok {
+		delete(debugger.breakpoints, address)
+		err := debugger.memory.Write(address, 1, []byte{val})
+		return err
+	}
+	return nil
+}
 
 //Cleanup must be run before the end of the program
 func (debugger *Debugger) Cleanup() {

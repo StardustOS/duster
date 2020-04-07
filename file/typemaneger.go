@@ -216,6 +216,60 @@ func (s *Struct) Parse(bytes []byte, endianess binary.ByteOrder) (string, error)
 	return str, nil
 }
 
+type ComplexType interface {
+	Type
+	AddAtribute(*Attribute)
+	AddNeedType(*Attribute, dwarf.Offset)
+	AddType(dwarf.Offset, Type)
+}
+
+type Union struct {
+	Name string
+	attributes []*Attribute
+	needType   map[dwarf.Offset][]*Attribute
+}
+
+func (s *Union) AddAtribute(attr *Attribute) {
+	s.attributes = append(s.attributes, attr)
+}
+
+func (s *Union) AddNeedType(attr *Attribute, offset dwarf.Offset) {
+	if s.needType == nil {
+		s.needType = make(map[dwarf.Offset][]*Attribute)
+	}
+	s.needType[offset] = append(s.needType[offset], attr)
+}
+
+func (s *Union) AddType(offset dwarf.Offset, t Type) {
+	if attrs, ok := s.needType[offset]; ok {
+		for _, attr := range attrs {
+			attr.base = t
+		}
+	}
+}
+
+func (union *Union) Size() int {
+	var largest int 
+	for _, attr := range union.attributes {
+		if largest < attr.base.Size() {
+			largest = attr.base.Size()
+		}
+	}
+	return largest
+}
+
+func (union *Union) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
+	str := "{"
+	for _, attr := range union.attributes {
+		val, err := attr.base.Parse(bytes[:attr.base.Size()], endianess)
+		if err != nil {
+			return "", err
+		}
+		str = fmt.Sprintf("%s %s : %s", str, attr.FieldName, val)
+	}
+	return fmt.Sprintf("%s }", str), nil
+}
+
 type BaseType struct {
 	size     int
 	Encoding DType
@@ -335,6 +389,16 @@ func parseTypeDef(entry *dwarf.Entry, manager *TypeManager) (*TypeDef, error) {
 	return typedef, nil
 }
 
+func parseUnion(entry *dwarf.Entry) (*Union, error) {
+	newUnion := new(Union)
+	field := entry.AttrField(dwarf.AttrName)
+	if field == nil {
+		return nil, errors.New("Union has no name")
+	}
+	newUnion.Name = field.Val.(string)
+	return newUnion, nil 
+}
+
 func parseStruct(entry *dwarf.Entry) (*Struct, error) {
 	newStruct := new(Struct)
 	field := entry.AttrField(dwarf.AttrName)
@@ -360,15 +424,15 @@ func parseMember(entry *dwarf.Entry, manager *TypeManager) (*Attribute, error) {
 	offset := field.Val.(dwarf.Offset)
 	t := manager.getType(offset)
 	if t == nil {
-		manager.currentStruct.AddNeedType(newAttribute, offset)
-		manager.addWaiting(offset, manager.currentStruct)
+		manager.current.AddNeedType(newAttribute, offset)
+		manager.addWaiting(offset, manager.current)
 	} else {
 		newAttribute.base = t
 	}
 
 	field = entry.AttrField(dwarf.AttrDataMemberLoc)
 	if field == nil {
-		return nil, nil //errors.New("No memeber location")
+		return newAttribute, nil //errors.New("No memeber location")
 	}
 	newAttribute.Offset = int(field.Val.(int64))
 
@@ -401,7 +465,7 @@ type TypeManager struct {
 	Endianess     binary.ByteOrder
 	types         map[dwarf.Offset]Type
 	waitingDef    map[dwarf.Offset][]Type
-	currentStruct *Struct
+	current ComplexType
 	currentArray  *Array
 }
 
@@ -490,7 +554,7 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 			}
 			return err
 		}
-		manager.currentStruct = newStruct
+		manager.current = newStruct
 		manager.addType(entry.Offset, newStruct)
 		added = true
 	case dwarf.TagMember:
@@ -498,7 +562,7 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 		if err != nil {
 			return err
 		}
-		manager.currentStruct.AddAtribute(memeber)
+		manager.current.AddAtribute(memeber)
 	case dwarf.TagPointerType:
 		pointer, err := parsePointer(entry, manager)
 		if err != nil {
@@ -522,10 +586,18 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 		if err != nil && err != NoBoundary {
 			return err
 		}
+	case dwarf.TagUnionType:
+		union, err := parseUnion(entry)
+		if err != nil {
+			return nil
+		}
+		manager.current = union
+		manager.addType(entry.Offset, union)
+		added = true
 	}
 
-	manager.removeWaitingList(entry.Offset)
 	if added {
+		manager.removeWaitingList(entry.Offset)
 	}
 	return nil
 }

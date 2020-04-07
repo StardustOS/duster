@@ -5,6 +5,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"compress/gzip"
+	"io/ioutil"
 
 	"github.com/AtomicMalloc/debugger/debugger"
 	"github.com/c-bata/go-prompt"
@@ -37,7 +39,27 @@ func (cli *CLI) Init(domaind uint32, filename string) error {
 		prompt.Suggest{Text: "remove", Description: "Remove breakpoint"},
 	}
 	cli.dbg = debugger.Debugger{}
+	if strings.Contains(filename, ".gz") {
+		file, err := os.Open(filename)
+		if err != nil {
+			return err
+		}
+		r, err := gzip.NewReader(file)
+		if err != nil {
+			return err
+		}
+		bytes := make([]byte, 100)
+		tmpfile, err := ioutil.TempFile("", "os")
+		if err != nil {
+			return err
+		}
+		for n, _ := r.Read(bytes); n != 0; n, _ = r.Read(bytes) {
+			tmpfile.Write(bytes[:n])
+		}
+		filename = tmpfile.Name()
+	}
 	err := cli.dbg.Init(domaind, filename)
+	fmt.Println("ERROR ", err)
 	return err
 }
 

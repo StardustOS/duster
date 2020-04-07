@@ -12,6 +12,9 @@ Once the changes above have been made, then run stardust using the following com
 
 This will startup stardust and pause it. This enables use to debug from the first line of c. 
 
+## Running duster
+    ./duster -path=[Path to mini-os.gz] -id=[the domain id (e.g. 5)]
+
 ## Commands 
 The commands supported by the program are as follow:
     
@@ -24,3 +27,4 @@ The commands supported by the program are as follow:
 7. def [variable] - deferences a pointer (only works with variable not attribute, unfortunately)
 
 (The executable can be found in the bin folder. I still need to add a build system).
+ 

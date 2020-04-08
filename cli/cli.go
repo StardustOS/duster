@@ -59,7 +59,6 @@ func (cli *CLI) Init(domaind uint32, filename string) error {
 		filename = tmpfile.Name()
 	}
 	err := cli.dbg.Init(domaind, filename)
-	fmt.Println("ERROR ", err)
 	return err
 }
 

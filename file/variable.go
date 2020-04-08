@@ -1,6 +1,8 @@
 package file
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+)
 
 type Variable struct {
 	Name     string
@@ -18,4 +20,8 @@ func (variable *Variable) Size() int {
 
 func (variable *Variable) Location() []byte {
 	return variable.location
+}
+
+func (variable *Variable) Type() Type {
+	return variable.typeVar
 }

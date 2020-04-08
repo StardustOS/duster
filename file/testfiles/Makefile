@@ -1,5 +1,5 @@
 
-all: test variable_data simple globalvars different-scopes structs basicType typedef pointer arrays void unions
+all: test variable_data simple globalvars different-scopes structs basicType typedef pointer arrays void unions volatile constant
 
 test: test.c
 	gcc -g -O0 test.c -o test
@@ -39,6 +39,12 @@ recursive_struct: recursive_struct.c
 
 union: unions.c
 	gcc -g -O0 unions.c -o unions
+
+volatile: volatile.c
+	gcc -g -O0 volatile.c -o volatile
+
+constant: constant.c
+	gcc -g -O0 constant.c -o constant
 
 clean:
 	rm test

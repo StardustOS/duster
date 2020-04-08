@@ -164,19 +164,13 @@ func (debugger *Debugger) variableArray(variable *file.Variable, dregs *op.Dwarf
 		return
 	case *file.Array:
 		typeOfElement := t.(*file.Array)
-		if typeOfElement.Location == nil {
-			return 
-		}
-		fmt.Println(typeOfElement.Location)
-		address, piece, isAddress := op.ExecuteStackProgram(*dregs, typeOfElement.Location[:2])
+		address, _, _ := op.ExecuteStackProgram(*dregs, typeOfElement.Location[:2])
 		debugger.memory.Map(uint64(address), debugger.domainid, uint32(8), 0)
 		bytes, err := debugger.memory.Read(uint64(address), uint32(8))
 		fmt.Println(err)
-		startAddress := binary.LittleEndian.Uint64(bytes)
-		fmt.Println(startAddress)
-		fmt.Println("address", address)
-		fmt.Println("piece", piece)
-		fmt.Println("is address", isAddress)
+		size := binary.LittleEndian.Uint64(bytes)
+		typeOfElement.SetSize(int(size))
+		typeOfElement.Location = nil
 	}
 }
 
@@ -200,7 +194,7 @@ func (debugger *Debugger) GetVariable(name string) (string, error) {
 	debugger.variableArray(variable, dregs)
 
 	address, _, _ := getAddress(variable, dregs) 
-
+	fmt.Println("address", address)
 	err = debugger.memory.Map(uint64(address), debugger.domainid, uint32(variable.Size()), 0)
 	if err != nil {
 		return "", err

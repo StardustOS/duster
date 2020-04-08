@@ -299,3 +299,27 @@ func TestUnion(t *testing.T) {
 	}
 
 }
+
+func TestVolatile(t *testing.T) {
+	data := make([]byte, 4)
+	binary.LittleEndian.PutUint32(data, 100)
+	var tests = []val {
+		val{offset: 0x00000069, data: data, expected: "100"},
+	}
+	reader := setup("./testfiles/volatile", t)
+	var manager TypeManager
+	manager.Endianess = binary.LittleEndian
+	for entry, _ := reader.Next(); entry != nil; entry, _ = reader.Next() {
+		err := manager.ParseDwarfEntry(entry)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+	}
+	for _, v := range tests {
+		str, _ := manager.ParseBytes(v.offset, v.data)
+		if strings.Compare(str, v.expected) != 0 {
+			t.Errorf("Expected %s but got %s", str, v.expected)
+		}
+	}
+
+}

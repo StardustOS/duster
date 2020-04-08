@@ -56,6 +56,10 @@ type Array struct {
 	Location  []byte
 }
 
+func (arr *Array) SetSize(size int) {
+	arr.noElement = size
+}
+
 func (arr *Array) Size() int {
 	return arr.noElement * (arr.typeArray.Size() + 1)
 }
@@ -103,6 +107,8 @@ func (p *Pointer) Parse(bytes []byte, endianess binary.ByteOrder) (string, error
 	case *TypeDef:
 		val := p.typeOfPointer.(*TypeDef)
 		name = val.Name
+	case *VolatileType:
+		name = "volatile"
 	}
 	p.address = address
 	return fmt.Sprintf("(%s*) 0x%x", name, address), nil
@@ -482,7 +488,7 @@ func (manager *TypeManager) removeWaitingList(offset dwarf.Offset) {
 		for _, element := range list {
 			switch element.(type) {
 			default:
-				element = typeToAdd
+				return
 			case *TypeDef:
 				t := element.(*TypeDef)
 				t.Base = typeToAdd
@@ -495,6 +501,9 @@ func (manager *TypeManager) removeWaitingList(offset dwarf.Offset) {
 			case *Array:
 				t := element.(*Array)
 				t.typeArray = typeToAdd
+			case *VolatileType:
+				t := element.(*VolatileType)
+				t.t = typeToAdd
 			}
 		}
 		delete(manager.waitingDef, offset)
@@ -524,6 +533,35 @@ func (manager *TypeManager) ParseBytes(offset dwarf.Offset, bytes []byte) (strin
 	t := manager.getType(offset)
 	str, err := t.Parse(bytes, manager.Endianess)
 	return str, err
+}
+
+type VolatileType struct {
+	t Type
+}
+
+func (v *VolatileType) Size() int {
+	return v.t.Size()
+}
+
+func (v *VolatileType) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
+	return v.t.Parse(bytes, endianess)
+}
+
+func parseVolatile(entry *dwarf.Entry, manager *TypeManager) (*VolatileType, error) {
+	volatile := new(VolatileType)
+	field := entry.AttrField(dwarf.AttrType)
+	if field == nil {
+		return nil, nil	
+	}
+	offset := field.Val.(dwarf.Offset)
+	t := manager.getType(offset)
+	fmt.Println(t)
+	if t == nil {
+		manager.addWaiting(offset, volatile)
+	} else {
+		volatile.t = t
+	}
+	return volatile, nil 
 }
 
 func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
@@ -593,6 +631,13 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 		}
 		manager.current = union
 		manager.addType(entry.Offset, union)
+		added = true
+	case dwarf.TagVolatileType:
+		volatile, err := parseVolatile(entry, manager)
+		if err != nil {
+			return err
+		}
+		manager.addType(entry.Offset, volatile)
 		added = true
 	}
 

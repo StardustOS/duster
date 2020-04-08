@@ -564,6 +564,34 @@ func parseVolatile(entry *dwarf.Entry, manager *TypeManager) (*VolatileType, err
 	return volatile, nil 
 }
 
+type ConstType struct {
+	t Type
+}
+
+func (c *ConstType) Size() int {
+	return c.t.Size()
+}
+
+func (c *ConstType) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
+	return c.t.Parse(bytes, endianess)
+}
+
+func parseConst(entry *dwarf.Entry, manager *TypeManager) (*ConstType, error) {
+	constant := new(ConstType)
+	field := entry.AttrField(dwarf.AttrType)
+	if field == nil {
+		return nil, nil	
+	}
+	offset := field.Val.(dwarf.Offset)
+	t := manager.getType(offset)
+	if t == nil {
+		manager.addWaiting(offset, constant)
+	} else {
+		constant.t = t
+	}
+	return constant, nil 
+}
+
 func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 	var added bool
 	switch entry.Tag {
@@ -638,6 +666,13 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 			return err
 		}
 		manager.addType(entry.Offset, volatile)
+		added = true
+	case dwarf.TagConstType:
+		constant, err := parseConst(entry, manager)
+		if err != nil {
+			return err 
+		}
+		manager.addType(entry.Offset, constant)
 		added = true
 	}
 

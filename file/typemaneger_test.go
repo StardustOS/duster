@@ -244,7 +244,6 @@ func TestDynamicArray(t *testing.T) {
 
 }
 
-
 func TestRecusriveStruct(t *testing.T) {
 	p1 := make([]byte, 8)
 	p2 := make([]byte, 8)
@@ -252,7 +251,7 @@ func TestRecusriveStruct(t *testing.T) {
 	binary.LittleEndian.PutUint64(p1, 0x10294)
 	binary.LittleEndian.PutUint64(p2, 0x102945)
 	data := append(p1, p2...)
-	var tests = []val {
+	var tests = []val{
 		val{offset: 0x000002ff, data: data, expected: "{ next: (list_head*) 0x10294 prev: (list_head*) 0x102945 }"},
 	}
 	reader := setup("./testfiles/recursive_struct", t)
@@ -277,8 +276,8 @@ func TestUnion(t *testing.T) {
 	data := make([]byte, 8)
 
 	binary.LittleEndian.PutUint64(data, 254)
-	
-	var tests = []val {
+
+	var tests = []val{
 		val{offset: 0x000002ff, data: data, expected: "{ hello : 254 c : -2 }"},
 	}
 
@@ -303,7 +302,7 @@ func TestUnion(t *testing.T) {
 func TestVolatile(t *testing.T) {
 	data := make([]byte, 4)
 	binary.LittleEndian.PutUint32(data, 100)
-	var tests = []val {
+	var tests = []val{
 		val{offset: 0x00000069, data: data, expected: "100"},
 	}
 	reader := setup("./testfiles/volatile", t)
@@ -327,7 +326,7 @@ func TestVolatile(t *testing.T) {
 func TestConst(t *testing.T) {
 	data := make([]byte, 4)
 	binary.LittleEndian.PutUint32(data, 100)
-	var tests = []val {
+	var tests = []val{
 		val{offset: 0x00000069, data: data, expected: "100"},
 	}
 	reader := setup("./testfiles/constant", t)

@@ -1,5 +1,5 @@
 
-all: test variable_data simple globalvars different-scopes structs basicType typedef pointer arrays void unions volatile constant
+all: test variable_data simple globalvars different-scopes structs basicType typedef pointer arrays void unions volatile constant static
 
 test: test.c
 	gcc -g -O0 test.c -o test
@@ -46,6 +46,9 @@ volatile: volatile.c
 constant: constant.c
 	gcc -g -O0 constant.c -o constant
 
+static: static.c
+	gcc -g -O0 static.c -o static
+
 clean:
 	rm test
 	rm variable_data
@@ -56,4 +59,5 @@ clean:
 	rm typedef
 	rm pointer
 	rm void 
+	rm static
 	rm unions

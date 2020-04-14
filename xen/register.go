@@ -77,7 +77,7 @@ type Register struct {
 	registers map[string]uint64
 }
 
-func (register *Register) AddRegister(name string, content uint64) error {
+func (register *Register) SetRegister(name string, content uint64) error {
 	if register.registers == nil {
 		register.registers = make(map[string]uint64)
 	}
@@ -114,7 +114,7 @@ func (register *Register) GetRegister(name string) (uint64, error) {
 	return 0, fmt.Errorf("The register %s could not be found", name)
 }
 
-func (register *Register) DWARFRegisters() *op.DwarfRegisters {
+func (register *Register) DwarfRegisters() *op.DwarfRegisters {
 	r := &op.DwarfRegisters{}
 	for key, registerName := range amd64DwarfToName {
 		registerName = strings.ToLower(registerName)

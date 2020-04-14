@@ -4,6 +4,9 @@ import (
 	"debug/dwarf"
 	"debug/elf"
 	"encoding/binary"
+	"errors"
+
+	"github.com/AtomicMalloc/debugger/debugger"
 )
 
 type Parser struct {
@@ -62,6 +65,41 @@ func (p *Parser) Parse(pc uint64) error {
 	reader.SeekPC(pc)
 	err = p.parseVariables(reader)
 	return err
+}
+
+func (p *Parser) GetSymbol(name string, rip uint64) (debugger.Variable, error) {
+	err := p.Parse(rip)
+	if err != nil {
+		return nil, err
+	}
+	return p.symbols.GetSymbol(rip, name)
+}
+
+func (p *Parser) IsPointer(variable debugger.Variable) bool {
+	v := variable.(*Variable)
+	switch v.typeVar.(type) {
+	default:
+		return false
+	case *Pointer:
+		return true
+	}
+}
+
+func (p *Parser) ParsePointer(variable debugger.Variable, bytes []byte, endianess binary.ByteOrder) (string, error) {
+	v := variable.(*Variable)
+	switch v.typeVar.(type) {
+	default:
+		return "", errors.New("Not a pointer")
+	case *Pointer:
+		p := v.typeVar.(*Pointer)
+		return p.typeOfPointer.Parse(bytes, endianess)
+	}
+}
+
+func (p *Parser) GetPointContentSize(variable debugger.Variable) int {
+	v := variable.(*Variable)
+	k := v.typeVar.(*Pointer)
+	return k.typeOfPointer.Size()
 }
 
 func (p *Parser) SymbolManager() *SymbolManager {

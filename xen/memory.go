@@ -223,9 +223,11 @@ func (mappedMemory *Map) IsInMap(address uint64) bool {
 //Memory is used for interacting with the memory
 //of the virtual machine
 type Memory struct {
-	key  *C.xenforeignmemory_handle
-	ctrl *Xenctrl
-	maps []Map
+	key      *C.xenforeignmemory_handle
+	ctrl     *Xenctrl
+	maps     []Map
+	Vcpu     uint32
+	Domainid uint32
 }
 
 //Init must be called first gets handles for accessing memories
@@ -263,7 +265,6 @@ func (mem *Memory) Map(address uint64, domid uint32, size uint32, vcpu uint32) e
 		}
 	}
 	mem.maps = append(mem.maps, newMap)
-	fmt.Println(mem.maps)
 	return nil
 }
 
@@ -276,28 +277,26 @@ func (mem *Memory) getMap(address uint64) (Map, int) {
 	return Map{}, -1
 }
 
-func (mem *Memory) Read(address uint64, size uint32) ([]byte, error) {
-	mapToRead, index := mem.getMap(address)
-	if index == -1 {
-		return nil, nil
-	}
-	fmt.Println("size", size)
-	bytes, err := mapToRead.Read(address, uint16(size))
-	if err != nil {
-		return nil, err
-	}
-	return bytes, nil
-}
+// func (mem *Memory) Read(address uint64, size uint32) ([]byte, error) {
+// 	mapToRead, index := mem.getMap(address)
+// 	if index == -1 {
+// 		return nil, nil
+// 	}
+// 	bytes, err := mapToRead.Read(address, uint16(size))
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return bytes, nil
+// }
 
-func (mem *Memory) Write(address uint64, size uint32, bytes []byte) error {
-	mapToWrite, index := mem.getMap(address)
-	if index == -1 {
-		return errors.New("Not found")
-	}
-	//FIX THIS
-	err := mapToWrite.Write(address, bytes, uint16(size))
-	return err
-}
+// func (mem *Memory) Write(address uint64, size uint32, bytes []byte) error {
+// 	mapToWrite, index := mem.getMap(address)
+// 	if index == -1 {
+// 		return errors.New("Not found")
+// 	}
+// 	err := mapToWrite.Write(address, bytes, uint16(size))
+// 	return err
+// }
 
 //UnMap - &safe_place_to_write cleans up the memory once it's has been finished being used
 func (mem *Memory) UnMap(address uint64) error {
@@ -316,4 +315,28 @@ func (mem *Memory) UnMap(address uint64) error {
 	}
 
 	return nil
+}
+
+func (mem *Memory) Read(address uint64, size uint) ([]byte, error) {
+	memoryMap, index := mem.getMap(address)
+	if index == -1 {
+		err := mem.Map(address, mem.Domainid, uint32(size), mem.Vcpu)
+		if err != nil {
+			return nil, err
+		}
+		memoryMap, _ = mem.getMap(address)
+	}
+	return memoryMap.Read(address, uint16(size))
+}
+
+func (mem *Memory) Write(address uint64, bytes []byte, size uint) error {
+	memoryMap, index := mem.getMap(address)
+	if index == -1 {
+		err := mem.Map(address, mem.Domainid, uint32(size), mem.Vcpu)
+		if err != nil {
+			return err
+		}
+		memoryMap, _ = mem.getMap(address)
+	}
+	return memoryMap.Write(address, bytes, uint16(size))
 }

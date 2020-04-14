@@ -3,7 +3,6 @@ package file
 import (
 	"debug/dwarf"
 	"debug/elf"
-	"fmt"
 	"strings"
 )
 
@@ -80,7 +79,7 @@ func (f *File) Init() error {
 	return nil
 }
 
-func (f *File) GetAddress(filename string, line int) uint64 {
+func (f *File) Address(filename string, line int) uint64 {
 	if info, ok := f.informationFile[filename]; ok {
 		address := info.getAddress(line)
 		return address
@@ -92,16 +91,13 @@ func (f *File) CurrentLine() (string, int) {
 	return f.currentFile, f.currentLine
 }
 
-func (f *File) UpdateLine(rip uint64) (changed bool) {
+func (f *File) IsNewLine(rip uint64) (changed bool) {
 	reader := f.data.Reader()
 	entry, err := reader.SeekPC(rip)
-	// fmt.Println(err)
-	// fmt.Println(entry)
 	if entry == nil {
 		return false
 	}
 	lineReader, _ := f.data.LineReader(entry)
-	// fmt.Println(lineReader)
 	var lineEntry dwarf.LineEntry
 	err = lineReader.SeekPC(rip, &lineEntry)
 	if err == nil {
@@ -112,16 +108,4 @@ func (f *File) UpdateLine(rip uint64) (changed bool) {
 		f.currentFile = lineEntry.File.Name
 	}
 	return
-}
-
-func (f *File) Tag() {
-	reader := f.data.Reader()
-
-	for e, err := reader.Next(); e != nil; e, err = reader.Next() {
-		if e == nil && err == nil {
-			fmt.Println("End of section")
-		} else {
-			fmt.Printf("%+v\n", e)
-		}
-	}
 }

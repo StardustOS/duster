@@ -85,7 +85,7 @@ func (arr *Array) Parse(bytes []byte, endianess binary.ByteOrder) (string, error
 type Pointer struct {
 	size          int
 	typeOfPointer Type
-	address uint64
+	address       uint64
 }
 
 func (p *Pointer) Size() int {
@@ -230,7 +230,7 @@ type ComplexType interface {
 }
 
 type Union struct {
-	Name string
+	Name       string
 	attributes []*Attribute
 	needType   map[dwarf.Offset][]*Attribute
 }
@@ -255,7 +255,7 @@ func (s *Union) AddType(offset dwarf.Offset, t Type) {
 }
 
 func (union *Union) Size() int {
-	var largest int 
+	var largest int
 	for _, attr := range union.attributes {
 		if largest < attr.base.Size() {
 			largest = attr.base.Size()
@@ -402,7 +402,7 @@ func parseUnion(entry *dwarf.Entry) (*Union, error) {
 		return nil, errors.New("Union has no name")
 	}
 	newUnion.Name = field.Val.(string)
-	return newUnion, nil 
+	return newUnion, nil
 }
 
 func parseStruct(entry *dwarf.Entry) (*Struct, error) {
@@ -468,11 +468,11 @@ func parsePointer(entry *dwarf.Entry, manager *TypeManager) (*Pointer, error) {
 }
 
 type TypeManager struct {
-	Endianess     binary.ByteOrder
-	types         map[dwarf.Offset]Type
-	waitingDef    map[dwarf.Offset][]Type
-	current ComplexType
-	currentArray  *Array
+	Endianess    binary.ByteOrder
+	types        map[dwarf.Offset]Type
+	waitingDef   map[dwarf.Offset][]Type
+	current      ComplexType
+	currentArray *Array
 }
 
 func (manager *TypeManager) addWaiting(offset dwarf.Offset, t Type) {
@@ -551,17 +551,17 @@ func parseVolatile(entry *dwarf.Entry, manager *TypeManager) (*VolatileType, err
 	volatile := new(VolatileType)
 	field := entry.AttrField(dwarf.AttrType)
 	if field == nil {
-		return nil, nil	
+		return nil, nil
 	}
 	offset := field.Val.(dwarf.Offset)
 	t := manager.getType(offset)
-	fmt.Println(t)
+	//	fmt.Println(t)
 	if t == nil {
 		manager.addWaiting(offset, volatile)
 	} else {
 		volatile.t = t
 	}
-	return volatile, nil 
+	return volatile, nil
 }
 
 type ConstType struct {
@@ -580,7 +580,7 @@ func parseConst(entry *dwarf.Entry, manager *TypeManager) (*ConstType, error) {
 	constant := new(ConstType)
 	field := entry.AttrField(dwarf.AttrType)
 	if field == nil {
-		return nil, nil	
+		return nil, nil
 	}
 	offset := field.Val.(dwarf.Offset)
 	t := manager.getType(offset)
@@ -589,7 +589,7 @@ func parseConst(entry *dwarf.Entry, manager *TypeManager) (*ConstType, error) {
 	} else {
 		constant.t = t
 	}
-	return constant, nil 
+	return constant, nil
 }
 
 func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
@@ -670,7 +670,7 @@ func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 	case dwarf.TagConstType:
 		constant, err := parseConst(entry, manager)
 		if err != nil {
-			return err 
+			return err
 		}
 		manager.addType(entry.Offset, constant)
 		added = true

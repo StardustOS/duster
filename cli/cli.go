@@ -5,29 +5,27 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"compress/gzip"
-	"io/ioutil"
 
-	"github.com/AtomicMalloc/debugger/debugger"
 	"github.com/c-bata/go-prompt"
 )
 
-type Command interface {
-	Text() string
-	Description() string
-	Run() (string, error)
-	Matches(string) bool
+type Debugger interface {
+	Continue(uint32) error
+	SetBreakpoint(string, int, uint32) error
+	RemoveBreakpoint(string, int, uint32) error
+	Step(uint32) error
+	GetLineInformation() string
+	GetVariable(string) (string, error)
+	Dereference(uint32, string) (string, error)
 }
 
 type CLI struct {
 	prompt      string
-	msg         string
-	commands    []Command
-	dbg         debugger.Debugger
+	dbg         Debugger
 	suggestions []prompt.Suggest
 }
 
-func (cli *CLI) Init(domaind uint32, filename string) error {
+func (cli *CLI) Init(debugger Debugger) {
 	cli.prompt = ">"
 	cli.suggestions = []prompt.Suggest{
 		prompt.Suggest{Text: "break", Description: "Sets a break point at in a file (argument in the form of file.c:<line no>"},
@@ -38,28 +36,7 @@ func (cli *CLI) Init(domaind uint32, filename string) error {
 		prompt.Suggest{Text: "def", Description: "Deference a variable"},
 		prompt.Suggest{Text: "remove", Description: "Remove breakpoint"},
 	}
-	cli.dbg = debugger.Debugger{}
-	if strings.Contains(filename, ".gz") {
-		file, err := os.Open(filename)
-		if err != nil {
-			return err
-		}
-		r, err := gzip.NewReader(file)
-		if err != nil {
-			return err
-		}
-		bytes := make([]byte, 100)
-		tmpfile, err := ioutil.TempFile("", "os")
-		if err != nil {
-			return err
-		}
-		for n, _ := r.Read(bytes); n != 0; n, _ = r.Read(bytes) {
-			tmpfile.Write(bytes[:n])
-		}
-		filename = tmpfile.Name()
-	}
-	err := cli.dbg.Init(domaind, filename)
-	return err
+	cli.dbg = debugger
 }
 
 func (cli *CLI) completer(d prompt.Document) []prompt.Suggest {
@@ -91,58 +68,55 @@ func (cli *CLI) ProcessInput(input string) {
 		}
 		err = cli.dbg.SetBreakpoint(args[0], lineNo, 0)
 		if err == nil {
-			fmt.Printf("Break point set @ %s:%d", values[0], lineNo)
+			fmt.Printf("Break point set @ %s:%d\n", values[0], lineNo)
 		} else {
 			fmt.Println(err)
 		}
 	case "step":
-		if cli.dbg.IsPaused() {
-			cli.dbg.StartSingle(0, true)
-			cli.dbg.Step(0)
-			fmt.Println(cli.dbg.GetLineInformation())
-		} else {
-			fmt.Println("Error: the doamin has not been paused")
+		err := cli.dbg.Step(0)
+		if err != nil {
+			fmt.Println(err)
 		}
+		fmt.Println(cli.dbg.GetLineInformation())
 	case "read":
-		if cli.dbg.IsPaused() {
-			val, err := cli.dbg.GetVariable(values[1])
-			if err != nil {
-				fmt.Println(err)
-			} else {
-				fmt.Println(val)
-			}
+		val, err := cli.dbg.GetVariable(values[1])
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			fmt.Println(val)
 		}
+	
 	case "def":
-		if cli.dbg.IsPaused() {
-			val, err := cli.dbg.Deference(0, values[1])
-			if err != nil {
-				fmt.Println(err)
-			} else {
-				fmt.Println(val)
-			}
+		val, err := cli.dbg.Dereference(0, values[1])
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			fmt.Println(val)
 		}
+		
 	case "remove":
-		if cli.dbg.IsPaused() {
-			if len(values) != 2 {
-				fmt.Println("Error: too many arguments for break (expected argument in the form file.c:<line no>)")
-				return
-			}
-			args := strings.Split(values[1], ":")
-			if len(args) != 2 {
-				fmt.Println("Error: argument in the wrong format (expected file.c:<line no>)")
-			}
-			lineNo, err := strconv.Atoi(args[1])
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			err = cli.dbg.RemoveBreakpoint(args[0], lineNo, 0)
-			if err != nil {
-				fmt.Println(err)
-			} else {
-				fmt.Printf("Removed breakpoint at %s:%d\n", args[0], lineNo)
-			}
+		if len(values) != 2 {
+			fmt.Println("Error: too many arguments for break (expected argument in the form file.c:<line no>)")
+			return
 		}
+		args := strings.Split(values[1], ":")
+		if len(args) != 2 {
+			fmt.Println("Error: argument in the wrong format (expected file.c:<line no>)")
+		}
+
+		lineNo, err := strconv.Atoi(args[1])
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		err = cli.dbg.RemoveBreakpoint(args[0], lineNo, 0)
+		if err != nil {
+			fmt.Println(err)
+		} else {
+			fmt.Printf("Removed breakpoint at %s:%d\n", args[0], lineNo)
+		}
+
+		
 	case "quit":
 		os.Exit(0)
 	case "continue":

@@ -69,7 +69,7 @@ func (sym *SymbolTable) AddVariable(variable *Variable) {
 	if sym.symbols == nil {
 		sym.symbols = make(map[string]*Variable)
 	}
-	sym.symbols[variable.Name] = variable
+	sym.symbols[variable.name] = variable
 }
 
 func (sym *SymbolTable) AddParent(parent *SymbolTable) {
@@ -83,7 +83,7 @@ func parseVariable(entry *dwarf.Entry, manager *TypeManager) (*Variable, error) 
 		return nil, NoName
 	}
 	name := field.Val.(string)
-	variable.Name = name
+	variable.name = name
 	field = entry.AttrField(dwarf.AttrType)
 	if field == nil {
 		return nil, errors.New("Error: could not find type")

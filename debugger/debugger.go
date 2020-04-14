@@ -330,7 +330,7 @@ func (debugger *Debugger) GetVariable(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s = %s", variable.Name(), val), nil
+	return fmt.Sprintf("%s = %s", name, val), nil
 }
 
 

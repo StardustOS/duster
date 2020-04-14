@@ -2,11 +2,13 @@ package debugger_test
 
 import (
 	"testing"
+	"encoding/binary"
 
 	"github.com/AtomicMalloc/debugger/debugger"
 	mocks "github.com/AtomicMalloc/debugger/mock_debugger"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/go-delve/delve/pkg/dwarf/op"
 )
 
 func setup(mockCtrl *gomock.Controller) (*mocks.MockMemoryAccess, *mocks.MockControl, *mocks.MockLineInformation, *mocks.MockRegisterHandler, *mocks.MockSymbol, *debugger.Debugger) {
@@ -108,4 +110,38 @@ func TestContinue(t *testing.T) {
 
 	err := dbg.Continue(vcpu)
 	assert.Nil(t, err)
+}
+
+func TestGetVariable(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	mem, cntrl, _, regs, sym, dbg := setup(mockCtrl)
+	dummyRegisters := mocks.NewMockRegisters(mockCtrl)
+	variable := mocks.NewMockVariable(mockCtrl)
+	vcpu := uint32(0)
+	varName := "myvar"
+	rip := uint64(0x33)
+	address := uint64(0x492384)
+	bytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bytes, address)
+	size := 5
+	content := []byte{0x013, 0x02}
+	location := []byte{0x03}
+	//Note the DWARF expression just says 0x492384 is a literal address
+	location = append(location, bytes...)
+
+	gomock.InOrder(
+		cntrl.EXPECT().IsPaused().Return(true),
+		regs.EXPECT().GetRegisters(vcpu).Return(dummyRegisters, nil),
+		dummyRegisters.EXPECT().GetRegister("rip").Return(rip, nil),
+		sym.EXPECT().GetSymbol(varName, rip).Return(variable, nil),
+		dummyRegisters.EXPECT().DwarfRegisters().Return(&op.DwarfRegisters{}),
+		variable.EXPECT().Location().Return(location),
+		variable.EXPECT().Size().Return(size),
+		mem.EXPECT().Read(address, uint(size)).Return(content, nil),
+		variable.EXPECT().Parse(content, binary.LittleEndian).Return("50", nil),
+	)
+	val, err := dbg.GetVariable("myvar")
+	assert.Nil(t, err)
+	assert.Equal(t, val, "myvar = 50")
 }

@@ -2,7 +2,6 @@ package xen
 
 import (
 	"testing"
-	"fmt"
 	"strings"
 	"os/exec"
 	"bytes"
@@ -25,6 +24,30 @@ func isPaused() bool {
 	return false
 }
 
+func TestUnpause(t *testing.T) {
+	domainid := testSetup()
+	cntrl := Xenctrl{DomainID: uint32(domainid)}
+	cntrl.Init()
+
+	err := cntrl.Pause()
+	if err != nil {
+		t.Error(err)
+		return 
+	}
+
+	err = cntrl.Unpause()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if isPaused() {
+		t.Error("Error: did not unpause VM")
+		return
+	}
+
+	testTeardown()
+}
 
 func TestPause(t *testing.T) {
 	domainid := testSetup()

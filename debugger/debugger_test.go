@@ -47,6 +47,20 @@ func TestStep(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+//Step should return an error if the VM isn't paused
+func TestStepNotPaused(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	_, cntrl, _, _, _, dbg := setup(mockCtrl)
+	vcpu := uint32(0)
+	gomock.InOrder(
+		cntrl.EXPECT().IsPaused().Return(false),
+	)
+	err := dbg.Step(vcpu)
+	assert.NotNil(t, err)
+	assert.Equal(t, debugger.NotPaused, err)
+}
+
 //Tests we can add a breakpoint correctly
 func TestAddBreakpoint(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
@@ -146,6 +160,7 @@ func TestGetVariable(t *testing.T) {
 	assert.Equal(t, val, "myvar = 50")
 }
 
+//Test Derefence works correctly
 func TestDereference(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()

@@ -1,5 +1,4 @@
 package xen
-
 /*
 #cgo CFLAGS: -g -Wall
 #cgo LDFLAGS: -lxenforeignmemory -lxenctrl
@@ -36,7 +35,6 @@ void write_memory(void* map, void* buffer, int offset, int length) {
 	//char* b = (char*)map;
 	memcpy((map + offset), buffer, length);
 }
-
 */
 import "C"
 
@@ -149,11 +147,13 @@ func CreatePage(address uint64, memory unsafe.Pointer) *Page {
 	return page
 }
 
+//Map represents an area of mapped memory
 type Map struct {
 	memories []*Page
 	pointer  unsafe.Pointer
 }
 
+//AddPointer 
 func (mappedMemory *Map) AddPointer(pointer unsafe.Pointer, size uint32, address uint64) {
 	mappedMemory.pointer = pointer
 	page := CreatePage(address, pointer)
@@ -277,27 +277,6 @@ func (mem *Memory) getMap(address uint64) (Map, int) {
 	return Map{}, -1
 }
 
-// func (mem *Memory) Read(address uint64, size uint32) ([]byte, error) {
-// 	mapToRead, index := mem.getMap(address)
-// 	if index == -1 {
-// 		return nil, nil
-// 	}
-// 	bytes, err := mapToRead.Read(address, uint16(size))
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return bytes, nil
-// }
-
-// func (mem *Memory) Write(address uint64, size uint32, bytes []byte) error {
-// 	mapToWrite, index := mem.getMap(address)
-// 	if index == -1 {
-// 		return errors.New("Not found")
-// 	}
-// 	err := mapToWrite.Write(address, bytes, uint16(size))
-// 	return err
-// }
-
 //UnMap - &safe_place_to_write cleans up the memory once it's has been finished being used
 func (mem *Memory) UnMap(address uint64) error {
 	mapToRemove, index := mem.getMap(address)
@@ -317,6 +296,7 @@ func (mem *Memory) UnMap(address uint64) error {
 	return nil
 }
 
+//Read memory from the VM uses the interface set out by the debugger
 func (mem *Memory) Read(address uint64, size uint) ([]byte, error) {
 	memoryMap, index := mem.getMap(address)
 	if index == -1 {
@@ -329,6 +309,7 @@ func (mem *Memory) Read(address uint64, size uint) ([]byte, error) {
 	return memoryMap.Read(address, uint16(size))
 }
 
+//Write data to the memory implements the interface set out by the debugger
 func (mem *Memory) Write(address uint64, bytes []byte, size uint) error {
 	memoryMap, index := mem.getMap(address)
 	if index == -1 {

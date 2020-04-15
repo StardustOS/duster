@@ -141,8 +141,8 @@ func TestInitWorks(t *testing.T) {
 
 func TestMapMemory(t *testing.T) {
 	id := uint32(testSetup())
-	memory := &Memory{}
-	domain := &Xenctrl{}
+	memory := &Memory{Domainid: id}
+	domain := &Xenctrl{DomainID: id}
 	err := memory.Init(domain)
 	if err != nil {
 		t.Error(err)
@@ -164,36 +164,30 @@ func TestMapMemory(t *testing.T) {
 
 func TestReadMemory(t *testing.T) {
 	id := uint32(testSetup())
-	memory := &Memory{}
-	domain := &Xenctrl{}
-
-	err := memory.Init(domain)
+	memory := &Memory{Domainid: id}
+	domain := &Xenctrl{DomainID: id}
+	err := domain.Init()
+	if err != nil {
+		t.Error(err)
+	}
+	err = memory.Init(domain)
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = domain.Init()
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = memory.Map(884816, id, 8, 0)
-	if err != nil {
-		t.Error("Error with mapping", err)
-	}
-	bytes, err := memory.Read(884816, 8)
+	bytes, err := memory.Read(0xa7dd7c, 100)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	fmt.Println(bytes)
-	data := binary.LittleEndian.Uint64(bytes)
-	fmt.Println(data)
-	if data != 131072 {
+	data := binary.LittleEndian.Uint32(bytes)
+
+	fmt.Println("DATA", data)
+	if data != 0 {
 		t.Error("Read the wrong value from memory")
 	}
 
-	err = memory.UnMap(884816)
 	if err != nil {
 		t.Errorf("Error with unmapping %s", err)
 	}
@@ -202,8 +196,8 @@ func TestReadMemory(t *testing.T) {
 
 func TestReadWriteMemory(t *testing.T) {
 	id := uint32(testSetup())
-	memory := &Memory{}
-	domain := &Xenctrl{}
+	memory := &Memory{Domainid: id}
+	domain := &Xenctrl{DomainID: id}
 
 	err := memory.Init(domain)
 	if err != nil {
@@ -215,13 +209,9 @@ func TestReadWriteMemory(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = memory.Map(884848, id, 8, 0)
-	if err != nil {
-		t.Error("Error with mapping", err)
-	}
 	bs := make([]byte, 8)
 	binary.LittleEndian.PutUint64(bs, 884848)
-	err = memory.Write(884848, 8, bs)
+	err = memory.Write(884848, bs, 8)
 	if err != nil {
 		t.Error(err)
 		return
@@ -234,12 +224,10 @@ func TestReadWriteMemory(t *testing.T) {
 	}
 	data := binary.LittleEndian.Uint64(bytes)
 
-	fmt.Println(data)
 	if data != 884848 {
 		t.Error("Read the wrong value from memory")
 	}
 
-	err = memory.UnMap(884848)
 	if err != nil {
 		t.Errorf("Error with unmapping %s", err)
 	}

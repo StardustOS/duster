@@ -65,3 +65,30 @@ func TestPause(t *testing.T) {
 
 	testTeardown()
 }
+
+func TestIsPaused(t *testing.T) {
+	domainid := testSetup()
+	cntrl := Xenctrl{DomainID: uint32(domainid)}
+	cntrl.Init()
+
+	err := cntrl.Pause()
+	if !isPaused() {
+		t.Error("Error: did not pause VM")
+		return
+	}
+
+	if !cntrl.IsPaused() {
+		t.Error("Error: the the IsPaused did not return true")
+	}
+
+	err = cntrl.Unpause()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	if cntrl.IsPaused() {
+		t.Error("Error: VM is unpaused should be false")
+	}
+	testTeardown()
+}

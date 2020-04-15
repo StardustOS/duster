@@ -145,3 +145,45 @@ func TestGetVariable(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, val, "myvar = 50")
 }
+
+func TestDereference(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	mem, cntrl, _, regs, sym, dbg := setup(mockCtrl)
+	variable := mocks.NewMockVariable(mockCtrl)
+	dummyRegisters := mocks.NewMockRegisters(mockCtrl)
+
+	vcpu := uint32(0)
+	varName := "myvar"
+	rip := uint64(0x33)
+	address := uint64(0x492384)
+	bytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bytes, address)
+	size := 5
+	c := uint64(2392)
+	content := make([]byte, 8)
+	binary.LittleEndian.PutUint64(content, c)
+	location := []byte{0x03}
+	//Note the DWARF expression just says 0x492384 is a literal address
+	location = append(location, bytes...)
+
+	gomock.InOrder(
+		cntrl.EXPECT().IsPaused().Return(true),
+		regs.EXPECT().GetRegisters(vcpu).Return(dummyRegisters, nil),
+		dummyRegisters.EXPECT().GetRegister("rip").Return(rip, nil),
+		sym.EXPECT().GetSymbol(varName, rip).Return(variable, nil),
+		sym.EXPECT().IsPointer(variable).Return(true),
+		dummyRegisters.EXPECT().DwarfRegisters().Return(&op.DwarfRegisters{}),
+		variable.EXPECT().Location().Return(location),
+		variable.EXPECT().Size().Return(size),
+		mem.EXPECT().Read(address, uint(size)).Return(content, nil),
+		sym.EXPECT().GetPointContentSize(variable).Return(len(content)),
+		mem.EXPECT().Read(uint64(2392), uint(len(content))).Return(content, nil),
+		sym.EXPECT().ParsePointer(variable, content, binary.LittleEndian).Return("0x21241", nil),
+	)
+
+	m, err := dbg.Dereference(0, varName)
+	assert.Nil(t, err)
+	assert.Equal(t, m, "*myvar = 0x21241")
+}

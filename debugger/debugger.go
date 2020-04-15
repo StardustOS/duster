@@ -374,7 +374,12 @@ func (debugger *Debugger) Dereference(vcpu uint32, name string) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	return debugger.symbols.ParsePointer(variable, bytes, debugger.endianess)
+
+	val, err := debugger.symbols.ParsePointer(variable, bytes, debugger.endianess)
+	if err != nil {
+		return "", err 
+	}
+	return fmt.Sprintf("*%s = %s", name, val), nil 
 }
 
 //Continues to the next breakpoint or until the VM terminates

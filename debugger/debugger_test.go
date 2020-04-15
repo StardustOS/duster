@@ -80,6 +80,21 @@ func TestAddBreakpoint(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestAddBreakpointNotPaused(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	_, cntrl, _, _, _, dbg := setup(mockCtrl)
+	vcpu := uint32(0)
+	gomock.InOrder(
+		cntrl.EXPECT().IsPaused().Return(false),
+	)
+	err := dbg.SetBreakpoint("startup.c", 10, vcpu)
+	assert.NotNil(t, err)
+	assert.Equal(t, debugger.NotPaused, err)
+}
+
+
+
 //Tests we can remove a breakpoint correctly 
 func TestRemoveBreakpoint(t *testing.T) {
 	mockCtrl := gomock.NewController(t)

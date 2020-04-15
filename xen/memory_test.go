@@ -46,6 +46,7 @@ func CreateDummyBuffer() unsafe.Pointer {
 	return unsafe.Pointer(&buffer[0])
 }
 
+//Tests that the CreatePage works correctly 
 func TestCreatePage(t *testing.T) {
 	dummyBuffer := CreateDummyBuffer()
 	page := CreatePage(startingAddress, dummyBuffer)
@@ -53,10 +54,10 @@ func TestCreatePage(t *testing.T) {
 		t.Error("Error: page was nil when should be non-nil value")
 		return
 	}
+	// Checking our calculations are correct 
 	start, end := page.Range()
 	expectedStart := uint64(startingAddress - (startingAddress % 4096))
 	expectedEnd := uint64(expectedStart + 4096)
-	fmt.Printf("Expected %d\n", expectedEnd)
 	if start != expectedStart {
 		t.Errorf("Error: starting address should be %d not %d", expectedStart, start)
 	}
@@ -66,6 +67,7 @@ func TestCreatePage(t *testing.T) {
 	}
 }
 
+// Checks the offset calculation is correct
 func TestCalculateOffset(t *testing.T) {
 	dummyBuffer := CreateDummyBuffer()
 	page := CreatePage(startingAddress, dummyBuffer)
@@ -75,6 +77,7 @@ func TestCalculateOffset(t *testing.T) {
 	}
 }
 
+// Checks the Page Read and Write method
 func TestReadWrite(t *testing.T) {
 	toWrite := []byte{1, 2, 3, 4}
 	dummyBuffer := CreateDummyBuffer()
@@ -106,6 +109,8 @@ var values = []Args{
 	Args{Offset: 0, Size: 4097, Expected: SizeTooLarge},
 }
 
+// Checks that the page read and write methods will return the correct 
+// errors
 func TestReadWriteError(t *testing.T) {
 	for _, val := range values {
 		t.Run("Testing", func(t *testing.T) {
@@ -129,6 +134,8 @@ func TestReadWriteError(t *testing.T) {
 	}
 }
 
+// Tests the the memory init function works 
+// correctly
 func TestInitWorks(t *testing.T) {
 	testSetup()
 	memory := Memory{}
@@ -139,6 +146,8 @@ func TestInitWorks(t *testing.T) {
 	testTeardown()
 }
 
+// Tests the memory map and unmap method works correctly 
+// (i.e. we can map/unmap memory)
 func TestMapMemory(t *testing.T) {
 	id := uint32(testSetup())
 	memory := &Memory{Domainid: id}
@@ -162,6 +171,8 @@ func TestMapMemory(t *testing.T) {
 	testTeardown()
 }
 
+// Tests the Read memory method works 
+// (i.e. we can read a section memory)
 func TestReadMemory(t *testing.T) {
 	id := uint32(testSetup())
 	memory := &Memory{Domainid: id}
@@ -180,10 +191,9 @@ func TestReadMemory(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	fmt.Println(bytes)
+
 	data := binary.LittleEndian.Uint32(bytes)
 
-	fmt.Println("DATA", data)
 	if data != 0 {
 		t.Error("Read the wrong value from memory")
 	}
@@ -194,6 +204,7 @@ func TestReadMemory(t *testing.T) {
 	testTeardown()
 }
 
+// Tests we can read and write memory successfully.
 func TestReadWriteMemory(t *testing.T) {
 	id := uint32(testSetup())
 	memory := &Memory{Domainid: id}

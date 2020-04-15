@@ -12,6 +12,11 @@ import (
 #include <stdio.h>
 #include <xencall.h>
 #include <string.h>
+// Also the capitialisation here is not careless even though it 
+// is not good style in C. Since in Go we need upper case to export 
+// a struct or attribute, and if it is not capitiliased then Go considers 
+// the C a different "package". Thus if there is no uppercase letter then 
+// we cannot access any of the data
 struct Regs {
 	uint64_t Rax;
 	uint64_t Rbx;
@@ -38,6 +43,10 @@ struct Regs {
 	uint64_t es;
 	uint64_t cs;
 };
+
+// We need these helper functions (i.e. we can't xc_vcpu_get/setcontext directly in go). This is because
+// handling unions in Go is impossible (or such a pain it's to handle and I couldn't find a solution).
+// So dealing with the union in C is far more convenient.
 int getRegister(xc_interface* key, uint32_t domainid, uint32_t vcpu, struct Regs* buffer) {
 	vcpu_guest_context_any_t context;
 	int err = xc_vcpu_getcontext(key, domainid, vcpu, &context);
@@ -74,7 +83,6 @@ int getRegister(xc_interface* key, uint32_t domainid, uint32_t vcpu, struct Regs
 	buffer->es = context.x64.user_regs.es;
 	buffer->cs = context.x64.user_regs.cs;
 	buffer->Rip = context.x64.user_regs.rip;
-	//printf("rip (from C): %lu\n", context.x64.user_regs.rip);
 
 	return 0;
 }
@@ -151,81 +159,74 @@ type Xenctrl struct {
 	DomainID uint32
 }
 
+//Init gets the handler for the xen domain
 func (control *Xenctrl) Init() error {
 	control.key = C.xc_interface_open(nil, nil, 0)
 	return nil
 }
 
+//IsPaused returns whether the domain is paused or not
 func (control *Xenctrl) IsPaused() bool {
 	paused := C.is_paused(control.key, C.uint(control.DomainID))
 	if paused == 0 {
 		return false
-	} else if paused == 1 {
+	} else {
 		return true
 	}
-	fmt.Println("Something went wrong")
-	return false
 }
 
+//Close destories the handler required to access 
+//Xen control API
 func (control *Xenctrl) Close() error {
 	C.xc_interface_close(control.key)
 	control.key = nil
 	return nil
 }
 
+//Key gets the handler for the Xen control
 func (control *Xenctrl) Key() *C.xc_interface {
 	return control.key
 }
 
+//Pause - pauses the domain
 func (control *Xenctrl) Pause() error {
 	err := C.xc_domain_pause(control.key, C.uint(control.DomainID))
 	if err != 0 {
-		return errors.New("SOMETHING BAD HAPPENDED")
+		return errors.New("Error: could not pause domain")
 	}
 	return nil
 }
 
+//Unpause - unpauses the domain
 func (control *Xenctrl) Unpause() error {
 	err := C.xc_domain_unpause(control.key, C.uint(control.DomainID))
 	if err != 0 {
-		return errors.New("SOMETHING BAD HAPPENDED")
+		return errors.New("Error: could not unpause domain")
 	}
 	return nil
 }
 
+//SetDebug - puts the domain into debug mode or not
 func (control *Xenctrl) SetDebug(domain uint32, enable bool) error {
+	var err int 
 	if enable {
-		err := C.xc_domain_setdebugging(control.key, C.uint32_t(control.DomainID), 1)
-		if err != 0 {
-			fmt.Println("Error at the debugging")
-		}
+		err = C.xc_domain_setdebugging(control.key, C.uint32_t(control.DomainID), 1)
 	} else {
-		C.xc_domain_setdebugging(control.key, C.uint32_t(domain), 0)
+		err = C.xc_domain_setdebugging(control.key, C.uint32_t(domain), 0)
+	}
+	if err != 0 {
+		return errors.New("Error: could not put or take the domain out of debug mode")
 	}
 	return nil
 }
 
-func (control *Xenctrl) WordSize(domainid uint32) WordSize {
-	var size C.uint
-	C.xc_domain_get_guest_width(control.key, C.uint(domainid), &size)
-	switch WordSize(size) {
-	case SixtyFourBit:
-		return SixtyFourBit
-	case ThirtyTwoBit:
-		return ThirtyTwoBit
-	}
-	return 0
-}
-
+//GetRegisters gets the registers from the domain and puts them in Go format
 func (control *Xenctrl) GetRegisters(vcpu uint32) (debugger.Registers, error) {
 	var context C.struct_Regs
 	err := C.getRegister(control.key, C.uint32_t(control.DomainID), C.uint32_t(vcpu), &context)
 	if err != 0 {
 		return nil, nil
-		fmt.Println("Something went wrong in get register")
 	}
-	//fmt.Println(err)
-	//fmt.Println("GetContext rbx")
 	register := &Register{}
 	register.SetRegister("rax", uint64(context.Rax))
 	register.SetRegister("rbx", uint64(context.Rbx))
@@ -250,10 +251,8 @@ func (control *Xenctrl) GetRegisters(vcpu uint32) (debugger.Registers, error) {
 func (control *Xenctrl) SetRegisters(vcpu uint32, regs debugger.Registers) error {
 	r := regs.(*Register)
 	if control.key == nil {
-		fmt.Println("KEY IS NIL")
-		return nil
+		return errors.New("Error: control does not have a handle")
 	}
 	err := C.setRegister(control.key, r.convertC(), C.uint32_t(control.DomainID), C.uint32_t(vcpu))
-	fmt.Println("Error from set registers: ", err)
 	return nil
 }

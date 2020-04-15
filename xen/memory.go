@@ -62,7 +62,6 @@ import "C"
 
 import (
 	"errors"
-	"fmt"
 	"unsafe"
 )
 

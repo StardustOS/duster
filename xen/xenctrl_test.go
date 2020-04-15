@@ -24,6 +24,7 @@ func isPaused() bool {
 	return false
 }
 
+// Test that the Unpuase method works correctly
 func TestUnpause(t *testing.T) {
 	domainid := testSetup()
 	cntrl := Xenctrl{DomainID: uint32(domainid)}
@@ -49,6 +50,7 @@ func TestUnpause(t *testing.T) {
 	testTeardown()
 }
 
+// Tests the Pause will pause the domain
 func TestPause(t *testing.T) {
 	domainid := testSetup()
 	cntrl := Xenctrl{DomainID: uint32(domainid)}
@@ -66,6 +68,8 @@ func TestPause(t *testing.T) {
 	testTeardown()
 }
 
+// Tests the IsPaused method will correctly determine 
+// whether the domain is paused
 func TestIsPaused(t *testing.T) {
 	domainid := testSetup()
 	cntrl := Xenctrl{DomainID: uint32(domainid)}

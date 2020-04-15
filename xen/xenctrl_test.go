@@ -1,10 +1,10 @@
 package xen
 
 import (
-	"testing"
-	"strings"
-	"os/exec"
 	"bytes"
+	"os/exec"
+	"strings"
+	"testing"
 )
 
 func isPaused() bool {
@@ -32,7 +32,7 @@ func TestUnpause(t *testing.T) {
 	err := cntrl.Pause()
 	if err != nil {
 		t.Error(err)
-		return 
+		return
 	}
 
 	err = cntrl.Unpause()
@@ -57,7 +57,7 @@ func TestPause(t *testing.T) {
 	err := cntrl.Pause()
 	if err != nil {
 		t.Error(err)
-		return 
+		return
 	}
 	if !isPaused() {
 		t.Error("Error: did not pause VM")

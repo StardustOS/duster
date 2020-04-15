@@ -9,13 +9,13 @@ import (
 	"github.com/go-delve/delve/pkg/dwarf/op"
 )
 
-type WordSize uint
 
-const (
-	SixtyFourBit WordSize = 8
-	ThirtyTwoBit WordSize = 4
-)
 
+//The mapping between hardware registers and DWARF registers is specified
+//in the System V ABI AMD64 Architecture Processor Supplement page 57,
+//figure 3.36
+//https://www.uclibc.org/docs/psABI-x86_64.pdf
+//(Taken from: https://github.com/go-delve/delve/blob/master/pkg/proc/amd64_arch.go)
 var amd64DwarfToName = map[uint64]string{
 	0:  "Rax",
 	1:  "Rdx",
@@ -72,11 +72,12 @@ var amd64DwarfToName = map[uint64]string{
 	66: "SW",
 }
 
+//Represents the state of a register at current point of time
 type Register struct {
-	Type      WordSize
 	registers map[string]uint64
 }
 
+//SetRegister takes the name of a register and sets that register to the value passed
 func (register *Register) SetRegister(name string, content uint64) error {
 	if register.registers == nil {
 		register.registers = make(map[string]uint64)
@@ -107,6 +108,7 @@ func (register *Register) convertC() C.struct_Regs {
 	return regs
 }
 
+//GetRegister returns the content of a register 
 func (register *Register) GetRegister(name string) (uint64, error) {
 	if content, ok := register.registers[name]; ok {
 		return content, nil
@@ -114,8 +116,12 @@ func (register *Register) GetRegister(name string) (uint64, error) {
 	return 0, fmt.Errorf("The register %s could not be found", name)
 }
 
+//DwarfRegisters return the register in the format recognised by the 
+//DWARF stack machine for expression
 func (register *Register) DwarfRegisters() *op.DwarfRegisters {
 	r := &op.DwarfRegisters{}
+
+
 	for key, registerName := range amd64DwarfToName {
 		registerName = strings.ToLower(registerName)
 		if val, ok := register.registers[registerName]; ok {
@@ -141,6 +147,5 @@ func (register *Register) DwarfRegisters() *op.DwarfRegisters {
 	r.SPRegNum = 7
 	r.PCRegNum = 16
 	r.FrameBase = int64(register.registers["rbp"]) + 16
-	fmt.Printf("%+v\n", r)
 	return r
 }

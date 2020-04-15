@@ -80,6 +80,7 @@ func TestAddBreakpoint(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+//Checks the debugger that debugger makes VM is paused
 func TestAddBreakpointNotPaused(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -119,6 +120,21 @@ func TestRemoveBreakpoint(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestRemoveBreakpointNotPaused(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	_, cntrl, _, _, _, dbg := setup(mockCtrl)
+	vcpu := uint32(0)
+	gomock.InOrder(
+		cntrl.EXPECT().IsPaused().Return(false),
+	)
+	err := dbg.RemoveBreakpoint("startup.c", 10, vcpu)
+	assert.NotNil(t, err)
+	assert.Equal(t, debugger.NotPaused, err)
+}
+
+
+
 //Tests we can continue correctly to the next breakpoint
 func TestContinue(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
@@ -139,6 +155,19 @@ func TestContinue(t *testing.T) {
 
 	err := dbg.Continue(vcpu)
 	assert.Nil(t, err)
+}
+
+func TestContinueNotPaused(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	_, cntrl, _, _, _, dbg := setup(mockCtrl)
+	vcpu := uint32(0)
+	gomock.InOrder(
+		cntrl.EXPECT().IsPaused().Return(false),
+	)
+	err := dbg.Continue(vcpu)
+	assert.NotNil(t, err)
+	assert.Equal(t, debugger.NotPaused, err)
 }
 
 func TestGetVariable(t *testing.T) {
@@ -173,6 +202,18 @@ func TestGetVariable(t *testing.T) {
 	val, err := dbg.GetVariable("myvar")
 	assert.Nil(t, err)
 	assert.Equal(t, val, "myvar = 50")
+}
+
+func TestGetVariableNotPaused(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	_, cntrl, _, _, _, dbg := setup(mockCtrl)
+	gomock.InOrder(
+		cntrl.EXPECT().IsPaused().Return(false),
+	)
+	_, err := dbg.GetVariable("myvar")
+	assert.NotNil(t, err)
+	assert.Equal(t, debugger.NotPaused, err)
 }
 
 //Test Derefence works correctly
@@ -216,4 +257,16 @@ func TestDereference(t *testing.T) {
 	m, err := dbg.Dereference(0, varName)
 	assert.Nil(t, err)
 	assert.Equal(t, m, "*myvar = 0x21241")
+}
+
+func TestDereferencePaused(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	_, cntrl, _, _, _, dbg := setup(mockCtrl)
+	gomock.InOrder(
+		cntrl.EXPECT().IsPaused().Return(false),
+	)
+	_, err := dbg.Dereference(uint32(0), "myvar")
+	assert.NotNil(t, err)
+	assert.Equal(t, debugger.NotPaused, err)
 }

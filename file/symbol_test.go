@@ -23,10 +23,10 @@ var positions = []test{
 		Filename: "testfiles/simple",
 		Positions: []pcPos{
 			pcPos{
-				PC: 0x401126,
+				PC: 0x649,
 				Variables: []Variable{
-					Variable{Name: "x"},
-					Variable{Name: "y"},
+					Variable{name: "x"},
+					Variable{name: "y"},
 				},
 			},
 		},
@@ -35,12 +35,12 @@ var positions = []test{
 		Filename: "testfiles/globalvars",
 		Positions: []pcPos{
 			pcPos{
-				PC: 0x63a,
+				PC: 0x656,
 				Variables: []Variable{
-					Variable{Name: "x"},
-					Variable{Name: "y"},
-					Variable{Name: "k"},
-					Variable{Name: "hello"},
+					Variable{name: "x"},
+					Variable{name: "y"},
+					Variable{name: "k"},
+					Variable{name: "hello"},
 				},
 			},
 		},
@@ -49,9 +49,9 @@ var positions = []test{
 		Filename: "testfiles/different-scopes",
 		Positions: []pcPos{
 			pcPos{
-				PC: 0x401106,
+				PC: 0x5fe,
 				Variables: []Variable{
-					Variable{Name: "j"},
+					Variable{name: "j"},
 				},
 			},
 		},
@@ -62,28 +62,28 @@ var positions = []test{
 		Filename: "testfiles/different-scopes",
 		Positions: []pcPos{
 			pcPos{
-				PC: 0x40111a,
+				PC: 0x626,
 				Variables: []Variable{
-					Variable{Name: "k"},
-					Variable{Name: "i"},
-					Variable{Name: "factor"},
+					Variable{name: "k"},
+					Variable{name: "i"},
+					Variable{name: "factor"},
 				},
 			},
 			pcPos{
-				PC: 0x401134,
+				PC: 0x628,
 				Variables: []Variable{
-					Variable{Name: "k"},
-					Variable{Name: "i"},
-					Variable{Name: "factor"},
-					Variable{Name: "j"},
+					Variable{name: "k"},
+					Variable{name: "i"},
+					Variable{name: "factor"},
+					Variable{name: "j"},
 				},
 			},
 			pcPos{
-				PC: 0x401141,
+				PC: 0x635,
 				Variables: []Variable{
-					Variable{Name: "k"},
-					Variable{Name: "i"},
-					Variable{Name: "factor"},
+					Variable{name: "k"},
+					Variable{name: "i"},
+					Variable{name: "factor"},
 				},
 			},
 		},
@@ -92,27 +92,27 @@ var positions = []test{
 		Filename: "testfiles/variable_data",
 		Positions: []pcPos{
 			pcPos{
-				PC: 0x401194,
+				PC: 0x71b,
 				Variables: []Variable{
-					Variable{Name: "clean_a"},
-					Variable{Name: "z"},
-					Variable{Name: "x"},
+					Variable{name: "clean_a"},
+					Variable{name: "z"},
+					Variable{name: "x"},
 				},
 			},
 			pcPos{
-				PC: 0x401136,
+				PC: 0x6aa,
 				Variables: []Variable{
-					Variable{Name: "i"},
-					Variable{Name: "a"},
+					Variable{name: "i"},
+					Variable{name: "a"},
 				},
 			},
 			pcPos{
-				PC: 0x401189,
+				PC: 0x701,
 				Variables: []Variable{
-					Variable{Name: "clean_a"},
-					Variable{Name: "z"},
-					Variable{Name: "a"},
-					Variable{Name: "meh"},
+					Variable{name: "clean_a"},
+					Variable{name: "z"},
+					Variable{name: "a"},
+					Variable{name: "meh"},
 				},
 			},
 		},
@@ -123,11 +123,11 @@ var positions = []test{
 		Filename: "testfiles/variable_data",
 		Positions: []pcPos{
 			pcPos{
-				PC: 0x401136,
+				PC: 0x6b5,
 				Variables: []Variable{
-					Variable{Name: "clean_a"},
-					Variable{Name: "val1"},
-					Variable{Name: "val2"},
+					Variable{name: "clean_a"},
+					Variable{name: "val1"},
+					Variable{name: "val2"},
 				},
 			},
 		},
@@ -141,7 +141,7 @@ func TestGetSymbol(t *testing.T) {
 			t.Error(err)
 		}
 		for _, pos := range test.Positions {
-			name := fmt.Sprintf("%s:%d", test.Filename, pos.PC)
+			name := fmt.Sprintf("%s:0x%x", test.Filename, pos.PC)
 			t.Run(name, func(t *testing.T) {
 				err := parser.Parse(pos.PC)
 				if err != nil {
@@ -149,16 +149,14 @@ func TestGetSymbol(t *testing.T) {
 				}
 				sym := parser.SymbolManager()
 				for _, expected := range pos.Variables {
-					variable, err := sym.GetSymbol(pos.PC, expected.Name)
-					fmt.Println(variable)
-					fmt.Println(err)
+					variable, err := sym.GetSymbol(pos.PC, expected.Name())
 					if err != nil && !test.ExpectedError {
 						t.Error(err)
 					} else if test.ExpectedError {
 						if err != test.Err {
 							t.Errorf("Error: expected to get %s not %s", test.Err, err)
 						}
-					} else if variable.Name != expected.Name && !test.ExpectedError {
+					} else if variable.Name() != expected.Name() && !test.ExpectedError {
 						t.Errorf("Expected %+v but got %+v", expected, variable)
 					}
 				}

@@ -1,5 +1,5 @@
 
-all: test variable_data simple globalvars different-scopes structs basicType typedef pointer arrays void unions volatile constant static
+all: test variable_data simple globalvars different-scopes structs basicType typedef pointer arrays void union volatile constant static
 
 test: test.c
 	gcc -g -O0 test.c -o test

@@ -7,27 +7,27 @@ import (
 	"testing"
 )
 
-func TestGetAddress(t *testing.T) {
+func TestAddress(t *testing.T) {
 	file := File{Name: "testfiles/test"}
 	err := file.Init()
 	if err != nil {
 		t.Error(err)
 	}
 
-	address := file.GetAddress("test.c", 6)
+	address := file.Address("test.c", 6)
 	if address != 0x654 {
 		t.Errorf("Error: expecting 0x64d but got %d\n", address)
 	}
 }
 
-func TestGetLine(t *testing.T) {
+func TestIsNewLine(t *testing.T) {
 	file := File{Name: "testfiles/test"}
 	err := file.Init()
 	if err != nil {
 		t.Error(err)
 	}
 
-	changed := file.UpdateLine(0x660)
+	changed := file.IsNewLine(0x660)
 	if !changed {
 		t.Error("Error should indicated changed")
 	}

@@ -48,15 +48,14 @@ func TestBasicType(t *testing.T) {
 	binary.LittleEndian.PutUint64(float64Bytes, k)
 
 	var basicTypes = []val{
-		val{offset: 0x00000039, data: integerBytes, expected: fmt.Sprintf("%d", uint64(val64))},
-		val{offset: 0x00000040, data: fourBytes, expected: fmt.Sprintf("%d", uint32(val32))},
-		val{offset: 0x00000065, data: neg, expected: "-1"},
-		val{offset: 0x00000049, data: []byte{byte(255)}, expected: "255"},
-		val{offset: 0x00000091, data: []byte{byte(255)}, expected: "-1"},
-		val{offset: 0x0000035b, data: []byte{byte(1)}, expected: "true"},
-		val{offset: 0x0000035b, data: []byte{byte(0)}, expected: "false"},
-		val{offset: 0x00000354, data: floatBytes, expected: "1.300000"},
-		val{offset: 0x00000362, data: float64Bytes, expected: "123.121000"},
+		val{offset: 0x00000038, data: integerBytes, expected: fmt.Sprintf("%d", uint64(val64))},
+		val{offset: 0x0000004d, data: fourBytes, expected: fmt.Sprintf("%d", uint32(val32))},
+		val{offset: 0x00000062, data: neg, expected: "-1"},
+		val{offset: 0x0000008e, data: []byte{byte(255)}, expected: "-1"},
+		val{offset: 0x00000371, data: []byte{byte(1)}, expected: "true"},
+		val{offset: 0x00000371, data: []byte{byte(0)}, expected: "false"},
+		val{offset: 0x0000036a, data: floatBytes, expected: "1.300000"},
+		val{offset: 0x00000378, data: float64Bytes, expected: "123.121000"},
 	}
 	reader := setup("./testfiles/basicType", t)
 	var manager TypeManager
@@ -89,7 +88,7 @@ func TestTypedef(t *testing.T) {
 	binary.LittleEndian.PutUint32(bytes, val32)
 	var typedefed = []val{
 		val{offset: 0x0000002d, data: integerBytes, expected: fmt.Sprintf("%d", uint64(val64))}, //Case where only one link
-		val{offset: 0x00000361, data: bytes, expected: fmt.Sprintf("%d", val32)},                //Case where multiple links back to original type
+		val{offset: 0x00000353, data: bytes, expected: fmt.Sprintf("%d", val32)},                //Case where multiple links back to original type
 	}
 
 	reader := setup("./testfiles/typedef", t)
@@ -138,8 +137,8 @@ func TestStruct(t *testing.T) {
 	bytes2 = append(bytes2, bytes...)
 	bytes2 = append(bytes2, charBytes2...)
 	var tests = []val{
-		val{offset: 0x000002e2, data: bytes, expected: "{ v: -1 c: -1 f: 1.300000 }"},
-		val{offset: 0x00000316, data: bytes2, expected: "{ m: 9223372036854775807 meh: { v: -1 c: -1 f: 1.300000 } b: -1 }"},
+		val{offset: 0x000002ff, data: bytes, expected: "{ v: -1 c: -1 f: 1.300000 }"},
+		val{offset: 0x0000032f, data: bytes2, expected: "{ m: 9223372036854775807 meh: { v: -1 c: -1 f: 1.300000 } b: -1 }"},
 	}
 
 	reader := setup("./testfiles/structs", t)
@@ -166,8 +165,8 @@ func TestPointer(t *testing.T) {
 	pointer := make([]byte, 8)
 	binary.LittleEndian.PutUint32(pointer, 0x10294)
 	var tests = []val{
-		val{offset: 0x00000345, data: pointer, expected: "(int*) 0x10294"},
-		val{offset: 0x0000034b, data: pointer, expected: "(k*) 0x10294"},
+		val{offset: 0x0000035c, data: pointer, expected: "(int*) 0x10294"},
+		val{offset: 0x00000362, data: pointer, expected: "(k*) 0x10294"},
 	}
 
 	reader := setup("./testfiles/pointer", t)
@@ -191,13 +190,14 @@ func TestPointer(t *testing.T) {
 
 }
 
+
 func TestArray(t *testing.T) {
 	expected := "Hola el mundo"
 	array := []byte(expected)
 	e := fmt.Sprintf("%v", array)
 	expected = e[1 : len(e)-1]
 	var tests = []val{
-		val{offset: 0x00000333, data: array, expected: expected},
+		val{offset: 0x0000034d, data: array, expected: expected},
 	}
 
 	reader := setup("./testfiles/arrays", t)
@@ -221,28 +221,28 @@ func TestArray(t *testing.T) {
 
 }
 
-func TestDynamicArray(t *testing.T) {
-	var tests = []val{
-		val{offset: 0x00000341},
-	}
+// func TestDynamicArray(t *testing.T) {
+// 	var tests = []val{
+// 		val{offset: 0x00000341},
+// 	}
 
-	reader := setup("./testfiles/dynamic-array", t)
-	var manager TypeManager
-	manager.Endianess = binary.LittleEndian
-	for entry, _ := reader.Next(); entry != nil; entry, _ = reader.Next() {
-		err := manager.ParseDwarfEntry(entry)
-		if err != nil {
-			t.Fatalf(err.Error())
-		}
-	}
-	for _, v := range tests {
-		_, err := manager.ParseBytes(v.offset, v.data)
-		if err != NeedParseLoction {
-			t.Fatalf("Need to returns error (we don't know the size of the data)")
-		}
-	}
+// 	reader := setup("./testfiles/dynamic-array", t)
+// 	var manager TypeManager
+// 	manager.Endianess = binary.LittleEndian
+// 	for entry, _ := reader.Next(); entry != nil; entry, _ = reader.Next() {
+// 		err := manager.ParseDwarfEntry(entry)
+// 		if err != nil {
+// 			t.Fatalf(err.Error())
+// 		}
+// 	}
+// 	for _, v := range tests {
+// 		_, err := manager.ParseBytes(v.offset, v.data)
+// 		if err != NeedParseLoction {
+// 			t.Fatalf("Need to returns error (we don't know the size of the data)")
+// 		}
+// 	}
 
-}
+// }
 
 func TestRecusriveStruct(t *testing.T) {
 	p1 := make([]byte, 8)

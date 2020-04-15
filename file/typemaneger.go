@@ -555,7 +555,6 @@ func parseVolatile(entry *dwarf.Entry, manager *TypeManager) (*VolatileType, err
 	}
 	offset := field.Val.(dwarf.Offset)
 	t := manager.getType(offset)
-	//	fmt.Println(t)
 	if t == nil {
 		manager.addWaiting(offset, volatile)
 	} else {

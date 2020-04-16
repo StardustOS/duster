@@ -68,7 +68,7 @@ func (cli *CLI) ProcessInput(input string) {
 		}
 		err = cli.dbg.SetBreakpoint(args[0], lineNo, 0)
 		if err == nil {
-			fmt.Printf("Break point set @ %s:%d\n", values[0], lineNo)
+			fmt.Printf("Break point set @ %s:%d\n", args[0], lineNo)
 		} else {
 			fmt.Println(err)
 		}

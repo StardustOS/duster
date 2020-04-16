@@ -149,7 +149,6 @@ import "C"
 
 import (
 	"errors"
-	"fmt"
 )
 
 type Uint64 C.ulong
@@ -208,7 +207,7 @@ func (control *Xenctrl) Unpause() error {
 
 //SetDebug - puts the domain into debug mode or not
 func (control *Xenctrl) SetDebug(domain uint32, enable bool) error {
-	var err int 
+	var err C.int 
 	if enable {
 		err = C.xc_domain_setdebugging(control.key, C.uint32_t(control.DomainID), 1)
 	} else {
@@ -254,5 +253,8 @@ func (control *Xenctrl) SetRegisters(vcpu uint32, regs debugger.Registers) error
 		return errors.New("Error: control does not have a handle")
 	}
 	err := C.setRegister(control.key, r.convertC(), C.uint32_t(control.DomainID), C.uint32_t(vcpu))
+	if err != 0 {
+		return errors.New("Error: could not set registers")
+	}
 	return nil
 }

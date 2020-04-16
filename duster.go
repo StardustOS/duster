@@ -15,24 +15,7 @@ import (
 	"github.com/AtomicMalloc/debugger/file"
 )
 
-
-func main() {
-	cmd := cli.CLI{}
-
-	var id int
-	var filename string
-	flag.StringVar(&filename, "path", "que", "Path to the os's binary")
-	flag.IntVar(&id, "id", -1, "The domain id to connect")
-	flag.Parse()
-
-	domainid := uint32(id)
-	cntrl := &xen.Xenctrl{DomainID: domainid}
-	cntrl.Init()
-	cntrl.SetDebug(domainid, true)
-	
-	mem := &xen.Memory{Domainid: domainid, Vcpu: 0}
-	mem.Init(cntrl)
-
+func unzipFile(filename string) string {
 	if strings.Contains(filename, ".gz") {
 		file, err := os.Open(filename)
 		if err != nil {
@@ -52,13 +35,42 @@ func main() {
 		}
 		filename = tmpfile.Name()
 	}
+	return filename
+}
+
+func main() {
+	cmd := cli.CLI{}
+
+	var id int
+	var filename string
+	flag.StringVar(&filename, "path", "", "Path to the os's binary")
+	flag.IntVar(&id, "id", -1, "The domain id to connect")
+	flag.Parse()
+
+	if id == -1 {
+		fmt.Println("Error: no domain id passed")
+		os.Exit(1)
+	} else if len(filename) == 0 {
+		fmt.Println("Error: no image was passed!")
+		os.Exit(1)
+	}
+
+	domainid := uint32(id)
+
+	cntrl := &xen.Xenctrl{DomainID: domainid}
+	cntrl.Init()
+	cntrl.SetDebug(domainid, true)
+	
+	mem := &xen.Memory{Domainid: domainid, Vcpu: 0}
+	mem.Init(cntrl)
+	filename = unzipFile(filename)
 	
 	p, err := file.NewParser(filename, binary.LittleEndian)
-
 	f := &file.File{Name: filename}
 	err = f.Init()
 	if err != nil {
-		fmt.Println("HERE IS THE FERROR", err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 	dbg := debugger.NewDebugger(mem, cntrl, f, cntrl, p)
 	cmd.Init(dbg)

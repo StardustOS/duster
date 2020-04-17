@@ -23,10 +23,12 @@ func (e BreakPointError) Error() string {
 		return fmt.Sprintf("Error: no breakpoint at %d", e.Address)
 	case AlreadyBreakpointSet:
 		return fmt.Sprintf("Error: breakpoint already at %d", e.Address)
+		
 	}
 	return ""
 }
 
+//Breakpoints manages the setting and remove of breakpoints
 type Breakpoints struct {
 	breakpoints        map[uint64]byte
 	mem                MemoryAccess
@@ -80,6 +82,8 @@ func (point *Breakpoints) Addresses() []uint64 {
 	return list
 }
 
+//RestoreInstruction - writes back the original byte that was overwritten 
+//with the breakpoint
 func (point *Breakpoints) RestoreInstruction(address uint64) error {
 	if point.AddressIsBreakpoint(address) {
 		err := point.Remove(address)
@@ -92,9 +96,11 @@ func (point *Breakpoints) RestoreInstruction(address uint64) error {
 	return BreakPointError{address, NotFound}
 }
 
+//RestoreBreakpoint - puts breakpoints back in their place (only the ones
+//remove by RestoreInstruction, NOT Remove)
 func (point *Breakpoints) RestoreBreakpoint() error {
-	for _, address := range point.restoreBreakpoints {
-		err := point.Add(address)
+	for _, addressRestoreInstruction := range point.restoreBreakpoints {
+		err := point.Add(addressRestoreInstruction)
 		if err != nil {
 			return err
 		}
@@ -102,6 +108,8 @@ func (point *Breakpoints) RestoreBreakpoint() error {
 	return nil
 }
 
+//AddressIsBreakpoint - returns the whether the address has a breakpoint
+//at it
 func (point *Breakpoints) AddressIsBreakpoint(address uint64) bool {
 	_, ok := point.breakpoints[address]
 	return ok

@@ -17,6 +17,7 @@ type Debugger interface {
 	GetLineInformation() string
 	GetVariable(string) (string, error)
 	Dereference(uint32, string) (string, error)
+	ListBreakpoints() string
 }
 
 type CLI struct {
@@ -54,6 +55,11 @@ func (cli *CLI) ProcessInput(input string) {
 	default:
 		fmt.Printf("Error: %s is not a recognised command", values[0])
 	case "break":
+		if len(values) == 1 {
+			list := cli.dbg.ListBreakpoints()
+			fmt.Println(list)
+			return
+		}
 		if len(values) != 2 {
 			fmt.Println("Error: too many arguments for break (expected argument in the form file.c:<line no>)")
 			return

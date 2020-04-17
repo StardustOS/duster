@@ -8,8 +8,9 @@ import (
 	"math"
 	"strings"
 )
-
+//Defines the Dwarf base type 
 type DType uint
+
 type ErrorD int
 
 const (
@@ -38,32 +39,47 @@ const (
 func (e ErrorD) Error() string {
 	switch e {
 	case NoAssociatedType:
-		return "No associated TYpe"
+		return "No associated Type"
 	case AnnoymousStruct:
-		return "Annoymous struct"
+		return "Anonymous struct"
 	}
 	return ""
 }
 
+//Type outlines the methods for interacting the 
+//with types
 type Type interface {
+	//Size returns the number bytes of required to 
+	//represent this type
 	Size() int
+
+	//Parse returns a human readable string of that 
+	//type (i.e. take the raw bytes passed and convert 
+	// them into something readable) 
 	Parse([]byte, binary.ByteOrder) (string, error)
 }
 
+//Array represents the array type (i.e. char[] or int[])
+//NOTE: this not represent array of the type char* or int*
 type Array struct {
 	typeArray Type
 	noElement int
 	Location  []byte
 }
 
+//SetSize is used to set the number of elements
+//(only used when a non-constant value is used in the array initilisation)
 func (arr *Array) SetSize(size int) {
 	arr.noElement = size
 }
 
+//Size returns the total number of bytes used to represent the array
+//(i.e. number of elements multipled by the size of the type)
 func (arr *Array) Size() int {
 	return arr.noElement * (arr.typeArray.Size() + 1)
 }
 
+//Parse returns a human readable string of the array
 func (arr *Array) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
 	if arr.Location != nil {
 		return "", NeedParseLoction
@@ -82,16 +98,53 @@ func (arr *Array) Parse(bytes []byte, endianess binary.ByteOrder) (string, error
 	return str, nil
 }
 
+//parseArrayEntry - parses the array dwarf entry and returns an Array
+func parseArrayEntry(entry *dwarf.Entry, manager *TypeManager) (*Array, error) {
+	arr := new(Array)
+	field := entry.AttrField(dwarf.AttrType)
+	if field == nil {
+		return nil, errors.New("No type")
+	}
+	offset := field.Val.(dwarf.Offset)
+	t := manager.getType(offset)
+	if t == nil {
+		manager.addWaiting(offset, arr)
+	} else {
+		arr.typeArray = t
+	}
+	return arr, nil
+}
+
+//parseArrayRange parses the array range from the dwarf
+//and set it in the struct
+func parseArrayRange(entry *dwarf.Entry, arr *Array) error {
+	field := entry.AttrField(dwarf.AttrUpperBound)
+	if field == nil {
+		return NoBoundary
+	}
+	upperBound, ok := field.Val.(int64)
+	if ok {
+		arr.noElement = int(upperBound)
+	} else {
+		location := field.Val.([]byte)
+		arr.Location = location
+	}
+	return nil
+}
+
+//Pointer represents the pointer in a C program
 type Pointer struct {
 	size          int
 	typeOfPointer Type
-	address       uint64
 }
 
+//Size returns the size of the Pointer 
+//(not the size of the content)
 func (p *Pointer) Size() int {
 	return p.size
 }
 
+//Parse returns a human string for the pointer 
 func (p *Pointer) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
 	address := parseUinteger(bytes, endianess)
 	var name string
@@ -110,78 +163,78 @@ func (p *Pointer) Parse(bytes []byte, endianess binary.ByteOrder) (string, error
 	case *VolatileType:
 		name = "volatile"
 	}
-	p.address = address
 	return fmt.Sprintf("(%s*) 0x%x", name, address), nil
 }
 
+//Type returns the type of a pointer
 func (p *Pointer) Type() Type {
 	return p.typeOfPointer
 }
 
-func (p *Pointer) Address() uint64 {
-	return p.address
-}
-
-func parseArrayEntry(entry *dwarf.Entry, manager *TypeManager) (*Array, error) {
-	arr := new(Array)
-	field := entry.AttrField(dwarf.AttrType)
-	if field == nil {
-		return nil, errors.New("No type")
-	}
-	offset := field.Val.(dwarf.Offset)
-	t := manager.getType(offset)
-	if t == nil {
-		manager.addWaiting(offset, arr)
-	} else {
-		arr.typeArray = t
-	}
-	return arr, nil
-}
-
-func parseArrayRange(entry *dwarf.Entry, arr *Array) error {
-	field := entry.AttrField(dwarf.AttrUpperBound)
-	if field == nil {
-		return NoBoundary
-	}
-	upperBound, ok := field.Val.(int64)
-	if ok {
-		arr.noElement = int(upperBound)
-	} else {
-		location := field.Val.([]byte)
-		arr.Location = location
-	}
-	return nil
-}
-
+//TypeDef represents the typedef type in C
 type TypeDef struct {
+	//Name represents the name of the typedef (e.g. for size_t)
 	Name string
+	//Base represents the type used to define the typedef (i.e. typedef uint_t unsigned int)
 	Base Type
 }
 
+//Size returns the size of the type
 func (t *TypeDef) Size() int {
 	return t.Base.Size()
 }
 
+//Parse returns a human readable of the data in bytes
 func (t *TypeDef) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
 	return t.Base.Parse(bytes, endianess)
 }
 
+//ComplexType represents the methods used to interact with complex types such
+//as structs or unions
+type ComplexType interface {
+	//Must include all the methods of primitive type
+	Type
+
+	//AddAtribute method for adding attribute to the type.
+	//It should be noted that how the attribute is interpreted depends
+	//on the implementation and is not something the interface prescribes. 
+	AddAtribute(*Attribute)
+
+	//AddNeedType method for saying that attrubute is waiting for a type 
+	//definition
+	AddNeedType(*Attribute, dwarf.Offset)
+
+	//AddType method for adding type definition to attributes missing said
+	//type
+	AddType(dwarf.Offset, Type)
+}
+
+//Attribute represents an attribute in a struct
 type Attribute struct {
+	//FieldName the name of the attribute
 	FieldName string
+	//Offset in the buffer where this attribute start
 	Offset    int
+	//The type of the attribute
 	base      Type
 }
 
+//Struct represents a struct time in C
 type Struct struct {
+	//Name of the struct
 	Name       string
 	attributes []*Attribute
 	needType   map[dwarf.Offset][]*Attribute
 }
 
+//AddAtribute adds an attribute to the struct
 func (s *Struct) AddAtribute(attr *Attribute) {
 	s.attributes = append(s.attributes, attr)
 }
 
+//AddNeedType - in DWARF types can be referred to before they are
+//actually defined. Hence this function is used to indicate that an 
+//attribute is waiting for type definition to be defined
 func (s *Struct) AddNeedType(attr *Attribute, offset dwarf.Offset) {
 	if s.needType == nil {
 		s.needType = make(map[dwarf.Offset][]*Attribute)
@@ -189,6 +242,7 @@ func (s *Struct) AddNeedType(attr *Attribute, offset dwarf.Offset) {
 	s.needType[offset] = append(s.needType[offset], attr)
 }
 
+//AddType add the missing type defintion to an attribute
 func (s *Struct) AddType(offset dwarf.Offset, t Type) {
 	if attrs, ok := s.needType[offset]; ok {
 		for _, attr := range attrs {
@@ -197,6 +251,9 @@ func (s *Struct) AddType(offset dwarf.Offset, t Type) {
 	}
 }
 
+//Size calculates the size in bytes. Note the way DWARF
+//encodes this information makes sure the calculation accounts
+//for the offset due to C's alignment rules
 func (s *Struct) Size() int {
 	size := 0
 	for _, attr := range s.attributes {
@@ -205,8 +262,8 @@ func (s *Struct) Size() int {
 	return size
 }
 
+//Parse returns a human readable string of struct
 func (s *Struct) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
-	//p := s.attributes[1].base.(*Pointer)
 	str := "{"
 	for _, val := range s.attributes {
 		start := val.Offset
@@ -222,23 +279,19 @@ func (s *Struct) Parse(bytes []byte, endianess binary.ByteOrder) (string, error)
 	return str, nil
 }
 
-type ComplexType interface {
-	Type
-	AddAtribute(*Attribute)
-	AddNeedType(*Attribute, dwarf.Offset)
-	AddType(dwarf.Offset, Type)
-}
-
+//Union represents unions in C
 type Union struct {
 	Name       string
 	attributes []*Attribute
 	needType   map[dwarf.Offset][]*Attribute
 }
 
+//AddAtribute add an attribute (i.e. a potential of intrepreting the data)
 func (s *Union) AddAtribute(attr *Attribute) {
 	s.attributes = append(s.attributes, attr)
 }
 
+//AddNeedType works as stated in the interface comment
 func (s *Union) AddNeedType(attr *Attribute, offset dwarf.Offset) {
 	if s.needType == nil {
 		s.needType = make(map[dwarf.Offset][]*Attribute)
@@ -246,6 +299,7 @@ func (s *Union) AddNeedType(attr *Attribute, offset dwarf.Offset) {
 	s.needType[offset] = append(s.needType[offset], attr)
 }
 
+//AddNeedType works as stated in the interface comment
 func (s *Union) AddType(offset dwarf.Offset, t Type) {
 	if attrs, ok := s.needType[offset]; ok {
 		for _, attr := range attrs {
@@ -254,6 +308,8 @@ func (s *Union) AddType(offset dwarf.Offset, t Type) {
 	}
 }
 
+//Size calculates the size of the union (i.e. returns the largest
+//size of the potential types it can hold)
 func (union *Union) Size() int {
 	var largest int
 	for _, attr := range union.attributes {
@@ -264,6 +320,8 @@ func (union *Union) Size() int {
 	return largest
 }
 
+//Parse returns a human readable string in the format {a1: v1, a2: v2} where 
+//ax represents a potential way of interpreting the data
 func (union *Union) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
 	str := "{"
 	for _, attr := range union.attributes {
@@ -276,12 +334,7 @@ func (union *Union) Parse(bytes []byte, endianess binary.ByteOrder) (string, err
 	return fmt.Sprintf("%s }", str), nil
 }
 
-type BaseType struct {
-	size     int
-	Encoding DType
-	Name     string
-}
-
+//parseInteger is helper function for parsing signed integers
 func parseInteger(bytes []byte, endianess binary.ByteOrder) int64 {
 	var integer int64
 	length := len(bytes)
@@ -301,6 +354,9 @@ func parseInteger(bytes []byte, endianess binary.ByteOrder) int64 {
 	return integer
 }
 
+//parseInteger is helper function for parsing unsigned integers
+//note we cannot just use the above functionality and cast to uint64
+//as the conversion doesn't correctly overflow when required.
 func parseUinteger(bytes []byte, endianess binary.ByteOrder) uint64 {
 	var val uint64
 	length := len(bytes)
@@ -317,9 +373,19 @@ func parseUinteger(bytes []byte, endianess binary.ByteOrder) uint64 {
 	return val
 }
 
+
+//BaseType represent the basic types defined by the DWARF file format. These 
+//are used to implement every other type in this file
+type BaseType struct {
+	size     int
+	Encoding DType
+	Name     string
+}
+
+//Parse returns a human readable string of the bytes interpreted as that type
 func (t *BaseType) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
 	if len(bytes) != t.size {
-		return "", errors.New("MEH")
+		return "", fmt.Errorf("Error: type %s expects %d bytes but got %d", t.Name, t.Size, len(bytes))
 	}
 	var output string
 	switch t.Encoding {
@@ -348,41 +414,44 @@ func (t *BaseType) Parse(bytes []byte, endianess binary.ByteOrder) (string, erro
 	return output, nil
 }
 
+//Size returns the size of the type
 func (t *BaseType) Size() int {
 	return t.size
 }
 
+//parseBaseEntry return a parse BaseType from the dwarf entry
+//Note: the fields specifying the encoding, size and name are required
 func parseBaseEntry(entry *dwarf.Entry) (*BaseType, error) {
 	base := new(BaseType)
 	field := entry.AttrField(dwarf.AttrByteSize)
 	if field == nil {
-		return nil, errors.New("Oops")
+		return nil, errors.New("Error: no bytes size for the base types")
 	}
 	base.size = int(field.Val.(int64))
 	field = entry.AttrField(dwarf.AttrEncoding)
 	if field == nil {
-		return nil, errors.New("Oops")
+		return nil, errors.New("Error: no encoding field")
 	}
 	base.Encoding = DType(field.Val.(int64))
 	field = entry.AttrField(dwarf.AttrName)
 	if field == nil {
-		return nil, errors.New("Oops")
+		return nil, errors.New("Error: no type name")
 	}
 	base.Name = field.Val.(string)
 	return base, nil
 }
 
+//parseTypeDef parses the typedef from the DWARF
 func parseTypeDef(entry *dwarf.Entry, manager *TypeManager) (*TypeDef, error) {
 	typedef := new(TypeDef)
 	field := entry.AttrField(dwarf.AttrName)
 	if field == nil {
-		return nil, errors.New("No attrName")
+		return nil, errors.New("Error: no attribute name in for the typedef")
 	}
 	typedef.Name = field.Val.(string)
 
 	field = entry.AttrField(dwarf.AttrType)
 	if field == nil {
-		//fmt.Printf("%+v\n", entry)
 		return nil, NoAssociatedType
 	}
 	offset := field.Val.(dwarf.Offset)
@@ -395,16 +464,18 @@ func parseTypeDef(entry *dwarf.Entry, manager *TypeManager) (*TypeDef, error) {
 	return typedef, nil
 }
 
+//parses the union from the dwarf
 func parseUnion(entry *dwarf.Entry) (*Union, error) {
 	newUnion := new(Union)
 	field := entry.AttrField(dwarf.AttrName)
 	if field == nil {
-		return nil, errors.New("Union has no name")
+		return nil, errors.New("Error: Union has no name")
 	}
 	newUnion.Name = field.Val.(string)
 	return newUnion, nil
 }
 
+//parses the struct from the DWARF
 func parseStruct(entry *dwarf.Entry) (*Struct, error) {
 	newStruct := new(Struct)
 	field := entry.AttrField(dwarf.AttrName)
@@ -415,6 +486,7 @@ func parseStruct(entry *dwarf.Entry) (*Struct, error) {
 	return newStruct, nil
 }
 
+//parses the member or attribute of a struct
 func parseMember(entry *dwarf.Entry, manager *TypeManager) (*Attribute, error) {
 	newAttribute := new(Attribute)
 	field := entry.AttrField(dwarf.AttrName)
@@ -445,6 +517,7 @@ func parseMember(entry *dwarf.Entry, manager *TypeManager) (*Attribute, error) {
 	return newAttribute, nil
 }
 
+//Parses a pointer 
 func parsePointer(entry *dwarf.Entry, manager *TypeManager) (*Pointer, error) {
 	pointer := new(Pointer)
 	field := entry.AttrField(dwarf.AttrByteSize)
@@ -454,7 +527,6 @@ func parsePointer(entry *dwarf.Entry, manager *TypeManager) (*Pointer, error) {
 	pointer.size = int(field.Val.(int64))
 	field = entry.AttrField(dwarf.AttrType)
 	if field == nil {
-		///fmt.Println(entry)
 		return pointer, nil
 	}
 	offset := field.Val.(dwarf.Offset)
@@ -467,6 +539,8 @@ func parsePointer(entry *dwarf.Entry, manager *TypeManager) (*Pointer, error) {
 	return pointer, nil
 }
 
+//TypeManager handles the parsing and interpretation of the 
+//types
 type TypeManager struct {
 	Endianess    binary.ByteOrder
 	types        map[dwarf.Offset]Type
@@ -475,6 +549,9 @@ type TypeManager struct {
 	currentArray *Array
 }
 
+//addWaiting - waiting list for any type that needs another type to be
+//defined before it is fully parsed (e.g. typedef not having its base type
+//defined yet)
 func (manager *TypeManager) addWaiting(offset dwarf.Offset, t Type) {
 	if manager.waitingDef == nil {
 		manager.waitingDef = make(map[dwarf.Offset][]Type)
@@ -482,6 +559,9 @@ func (manager *TypeManager) addWaiting(offset dwarf.Offset, t Type) {
 	manager.waitingDef[offset] = append(manager.waitingDef[offset], t)
 }
 
+//removeWaitingList - remove types from the waiting list. Please note
+//for this function to work the newly parsed type must have been added 
+//via the addType method for this to work.
 func (manager *TypeManager) removeWaitingList(offset dwarf.Offset) {
 	typeToAdd := manager.getType(offset)
 	if list, ok := manager.waitingDef[offset]; ok {
@@ -510,6 +590,8 @@ func (manager *TypeManager) removeWaitingList(offset dwarf.Offset) {
 	}
 }
 
+//addType - adds a newly parsed type to the struct. Please note
+//you can add a new type and place it into the waiting list
 func (manager *TypeManager) addType(offset dwarf.Offset, t Type) {
 	if manager.types == nil {
 		manager.types = make(map[dwarf.Offset]Type)
@@ -517,10 +599,13 @@ func (manager *TypeManager) addType(offset dwarf.Offset, t Type) {
 	manager.types[offset] = t
 }
 
+//Helper function for abstracting over the simple map used 
 func (manager *TypeManager) getType(offset dwarf.Offset) Type {
 	return manager.types[offset]
 }
 
+//Size returns the size based off the dwarf.Offset 
+//(which is unique to each type)
 func (manager *TypeManager) Size(offset dwarf.Offset) int {
 	t := manager.types[offset]
 	if t != nil {
@@ -529,24 +614,30 @@ func (manager *TypeManager) Size(offset dwarf.Offset) int {
 	return 0
 }
 
+//ParseBytes takes raw memory bytes and return a human readable string of that type
 func (manager *TypeManager) ParseBytes(offset dwarf.Offset, bytes []byte) (string, error) {
 	t := manager.getType(offset)
 	str, err := t.Parse(bytes, manager.Endianess)
 	return str, err
 }
 
+//VolatileType represents any type that has been 
+//defined has volatile int c;
 type VolatileType struct {
 	t Type
 }
 
+//Size the size of the volatile 
 func (v *VolatileType) Size() int {
 	return v.t.Size()
 }
 
+//Parse parses the volatile type
 func (v *VolatileType) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
 	return v.t.Parse(bytes, endianess)
 }
 
+//parses the dwarf entry for volatile type
 func parseVolatile(entry *dwarf.Entry, manager *TypeManager) (*VolatileType, error) {
 	volatile := new(VolatileType)
 	field := entry.AttrField(dwarf.AttrType)
@@ -563,18 +654,23 @@ func parseVolatile(entry *dwarf.Entry, manager *TypeManager) (*VolatileType, err
 	return volatile, nil
 }
 
+//ConstType represents the type defined as 
+//const int k;
 type ConstType struct {
 	t Type
 }
 
+//Size return the number of bytes to represent the type
 func (c *ConstType) Size() int {
 	return c.t.Size()
 }
 
+//Parse returns a pretty string of the value
 func (c *ConstType) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
 	return c.t.Parse(bytes, endianess)
 }
 
+//Parse constant type
 func parseConst(entry *dwarf.Entry, manager *TypeManager) (*ConstType, error) {
 	constant := new(ConstType)
 	field := entry.AttrField(dwarf.AttrType)
@@ -591,6 +687,7 @@ func parseConst(entry *dwarf.Entry, manager *TypeManager) (*ConstType, error) {
 	return constant, nil
 }
 
+//ParseDwarfEntry parses a dwarf entry and adds it the typemanager struct
 func (manager *TypeManager) ParseDwarfEntry(entry *dwarf.Entry) error {
 	var added bool
 	switch entry.Tag {

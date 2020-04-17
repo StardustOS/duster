@@ -19,37 +19,41 @@ func (i *info) addLineInformation(entry *dwarf.LineEntry) {
 }
 
 func (i *info) getAddress(line int) uint64 {
-	//fmt.Println(i.lineToAddressInfo[line])
 	if val, ok := i.lineToAddressInfo[line]; ok {
 		return val[0]
 	}
 	return 0
 }
 
-type File struct {
+//LineInformation - handles the translation between source line information
+//and addresses in the executable
+type LineInformation struct {
+	// Name of the image (i.e. my-os and so-)
 	Name            string
 	data            *dwarf.Data
-	information     map[uint64]dwarf.LineEntry
-	informationFile map[string]info
+	pcToLineEntry     map[uint64]dwarf.LineEntry
+	filenameToAddress map[string]info
 	currentLine     int
 	currentFile     string
 }
 
-func (f *File) Init() error {
-	f.information = make(map[uint64]dwarf.LineEntry)
-	f.informationFile = make(map[string]info)
+//Init - sets up the File struct. This must be run before any
+//of the other methods are run 
+func (lineInfo *LineInformation) Init() error {
+	lineInfo.pcToLineEntry = make(map[uint64]dwarf.LineEntry)
+	lineInfo.filenameToAddress = make(map[string]info)
 
-	file, err := elf.Open(f.Name)
-	//defer file.Close()
-
+	file, err := elf.Open(lineInfo.Name)
+	defer file.Close()
 	if err != nil {
 		return err
 	}
+
 	d, err := file.DWARF()
 	if err != nil {
 		return err
 	}
-	f.data = d
+	lineInfo.data = d
 	compilationReader := d.Reader()
 
 	for entry, err := compilationReader.Next(); entry != nil && err == nil; entry, err = compilationReader.Next() {
@@ -64,48 +68,68 @@ func (f *File) Init() error {
 
 		lineEntry := new(dwarf.LineEntry)
 		for err := lineReader.Next(lineEntry); err == nil; err = lineReader.Next(lineEntry) {
-			if _, ok := f.information[lineEntry.Address]; !ok {
-				f.information[lineEntry.Address] = *lineEntry
+			if _, ok := lineInfo.pcToLineEntry[lineEntry.Address]; !ok {
+				lineInfo.pcToLineEntry[lineEntry.Address] = *lineEntry
 			}
 			filename := lineEntry.File.Name
 			path := strings.Split(filename, "/")
 			name := path[len(path)-1]
-			i, _ := f.informationFile[name]
+			i, _ := lineInfo.filenameToAddress[name]
 			i.addLineInformation(lineEntry)
-			f.informationFile[name] = i
+			lineInfo.filenameToAddress[name] = i
 		}
 	}
 
 	return nil
 }
 
-func (f *File) Address(filename string, line int) uint64 {
-	if info, ok := f.informationFile[filename]; ok {
+//Address - gets the address of a place in a file and line
+func (lineInfo *LineInformation) Address(filename string, line int) uint64 {
+	if info, ok := lineInfo.filenameToAddress[filename]; ok {
 		address := info.getAddress(line)
 		return address
 	}
 	return 0
 }
 
-func (f *File) CurrentLine() (string, int) {
-	return f.currentFile, f.currentLine
+//AddressToLine - translates an address to the filename and line number
+func (lineInfo *LineInformation) AddressToLine(address uint64) (string, int, error) {
+	reader := lineInfo.data.Reader()
+	entry, err := reader.SeekPC(address)
+	if err != nil {
+		return "", 0, err
+	}
+
+	lineReader, _ := lineInfo.data.LineReader(entry)
+	var lineEntry dwarf.LineEntry
+	err = lineReader.SeekPC(address, &lineEntry)
+	if err != nil {
+		return "", 0, err
+	}
+	return lineEntry.File.Name, lineEntry.Line, nil 
 }
 
-func (f *File) IsNewLine(rip uint64) (changed bool) {
-	reader := f.data.Reader()
+func (lineInfo *LineInformation) CurrentLine() (string, int) {
+	return lineInfo.currentFile, lineInfo.currentLine
+}
+
+//IsNewLine - takes a PC counter and returns whether the new program
+//counter is on a new source line or not
+func (lineInfo *LineInformation) IsNewLine(rip uint64) (changed bool) {
+	reader := lineInfo.data.Reader()
 	entry, err := reader.SeekPC(rip)
 	if entry == nil {
 		return false
 	}
-	lineReader, _ := f.data.LineReader(entry)
+	lineReader, _ := lineInfo.data.LineReader(entry)
 	var lineEntry dwarf.LineEntry
 	err = lineReader.SeekPC(rip, &lineEntry)
 	if err == nil {
-		if lineEntry.Line != f.currentLine || strings.Compare(lineEntry.File.Name, f.currentFile) != 0 {
+		if lineEntry.Line != lineInfo.currentLine || strings.Compare(lineEntry.File.Name, lineInfo.currentFile) != 0 {
 			changed = true
 		}
-		f.currentLine = lineEntry.Line
-		f.currentFile = lineEntry.File.Name
+		lineInfo.currentLine = lineEntry.Line
+		lineInfo.currentFile = lineEntry.File.Name
 	}
 	return
 }

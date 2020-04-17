@@ -346,12 +346,3 @@ func TestConst(t *testing.T) {
 	}
 
 }
-
-
-func TestStatic(t *testing.T) {
-	binary.LittleEndian.PutUint32(data, 100)
-	var tests = []val{
-		val{offset: 0x00000069, data: data, expected: "100"},
-	}
-
-}

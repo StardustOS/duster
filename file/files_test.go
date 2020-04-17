@@ -8,7 +8,7 @@ import (
 )
 
 func TestAddress(t *testing.T) {
-	file := File{Name: "testfiles/test"}
+	file := LineInformation{Name: "testfiles/test"}
 	err := file.Init()
 	if err != nil {
 		t.Error(err)
@@ -21,7 +21,7 @@ func TestAddress(t *testing.T) {
 }
 
 func TestIsNewLine(t *testing.T) {
-	file := File{Name: "testfiles/test"}
+	file := LineInformation{Name: "testfiles/test"}
 	err := file.Init()
 	if err != nil {
 		t.Error(err)

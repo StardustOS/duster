@@ -99,6 +99,12 @@ type LineInformation interface {
 	//address. Please note the filename will be in form file.c not a complete path
 	//it is your responsability to handle issues because of this.
 	Address(string, int) uint64
+
+
+	//AddressToLine takes an address and converts it into line information.
+	//Please note this operation cannot affect the operation of the other 
+	//methods.
+	AddressToLine(address uint64) (string, int, error)
 }
 
 //MemoryAccess defines API that will be used to for reading and writing to memory
@@ -163,6 +169,7 @@ type Debugger struct {
 	symbols           Symbol
 }
 
+//NewDebugger - constructor the debugger struct
 func NewDebugger(memory MemoryAccess, controller Control, lineInfo LineInformation, registers RegisterHandler, symbols Symbol) *Debugger {
 	debugger := new(Debugger)
 	debugger.breakpointManager = NewBreakpointManager(memory)
@@ -407,7 +414,15 @@ func (debugger *Debugger) SetBreakpoint(filename string, line int, vcpu uint32) 
 	if !debugger.controller.IsPaused() {
 		return NotPaused
 	}
+
 	address := debugger.lineInfo.Address(filename, line)
+
+	//If the address is zero we're either trying to set a breakpoint 
+	//on an empty line or during the preamble. 
+	if address == 0 {
+		return fmt.Errorf("Error: could not set breakpoint @ %s:%d (most likely empty line or comment)", filename, line)
+	}
+
 	err := debugger.breakpointManager.Add(address)
 	return err
 }
@@ -420,4 +435,18 @@ func (debugger *Debugger) RemoveBreakpoint(filename string, line int, vcpu uint3
 	address := debugger.lineInfo.Address(filename, line)
 	err := debugger.breakpointManager.Remove(address)
 	return err
+}
+
+//ListBreakpoints - returns a formatted list of the breakpoints that have been set
+func (debugger *Debugger) ListBreakpoints() string {
+	addresses := debugger.breakpointManager.Addresses()
+	var formattedList string
+	for _, address := range addresses {
+		filename, line, _ := debugger.lineInfo.AddressToLine(address)
+		formattedList = fmt.Sprintf("%s0x%x (%s:%d)\n", formattedList, address, filename, line)
+	}
+	if len(formattedList) == 0 {
+		formattedList = "No breakpoints have been set!"
+	}
+	return formattedList
 }

@@ -4,12 +4,15 @@ import (
 	"debug/dwarf"
 	"debug/elf"
 	"encoding/binary"
-	"errors"
+	"fmt"
 
 	"github.com/AtomicMalloc/debugger/debugger"
 )
 
-type Parser struct {
+//SymbolicInformation represents the type and variables 
+//in the program. Implements the Symbol interface defined in the
+//debugger package
+type SymbolicInformation struct {
 	data      *dwarf.Data
 	types     *TypeManager
 	symbols   *SymbolManager
@@ -17,14 +20,15 @@ type Parser struct {
 	endianess binary.ByteOrder
 }
 
-func (p *Parser) parseTypes(reader *dwarf.Reader) error {
-	p.types = new(TypeManager)
-	p.types.Endianess = p.endianess
+//parseType - parses the type information the DWARF file
+func (symbolicInfo *SymbolicInformation) parseTypes(reader *dwarf.Reader) error {
+	symbolicInfo.types = new(TypeManager)
+	symbolicInfo.types.Endianess = symbolicInfo.endianess
 	for entry, err := reader.Next(); entry != nil; entry, err = reader.Next() {
 		if err != nil {
 			return err
 		}
-		err = p.types.ParseDwarfEntry(entry)
+		err = symbolicInfo.types.ParseDwarfEntry(entry)
 		if err != nil {
 			return err
 		}
@@ -32,14 +36,15 @@ func (p *Parser) parseTypes(reader *dwarf.Reader) error {
 	return nil
 }
 
-func (p *Parser) parseVariables(reader *dwarf.Reader) error {
-	p.symbols = new(SymbolManager)
-	p.symbols.typemanager = p.types
+//parseVariables - parses the variable information in the dwarf
+func (symbolicInfo *SymbolicInformation) parseVariables(reader *dwarf.Reader) error {
+	symbolicInfo.symbols = new(SymbolManager)
+	symbolicInfo.symbols.typemanager = symbolicInfo.types
 	for entry, err := reader.Next(); entry != nil; entry, err = reader.Next() {
 		if err != nil {
 			return err
 		}
-		err = p.symbols.ParseDwarfEntry(entry)
+		err = symbolicInfo.symbols.ParseDwarfEntry(entry)
 		if err != nil {
 			return err
 		}
@@ -47,35 +52,43 @@ func (p *Parser) parseVariables(reader *dwarf.Reader) error {
 	return nil
 }
 
-func (p *Parser) Parse(pc uint64) error {
-	reader := p.data.Reader()
+//Parse - parses the compile unit that contains the information (both types and variables) that 
+//will be required for the current program counter
+func (symbolicInfo *SymbolicInformation) Parse(pc uint64) error {
+	reader := symbolicInfo.data.Reader()
 	entry, err := reader.SeekPC(pc)
 	if err != nil {
 		return err
 	}
 
-	if p.cu == entry {
+	//Checks whether we've already parsed this particularly Compile
+	//unit and then skips if we have
+	if symbolicInfo.cu == entry {
 		return nil
 	}
-	p.cu = entry
-	err = p.parseTypes(reader)
+
+	symbolicInfo.cu = entry
+	err = symbolicInfo.parseTypes(reader)
 	if err != nil {
 		return err
 	}
 	reader.SeekPC(pc)
-	err = p.parseVariables(reader)
+	err = symbolicInfo.parseVariables(reader)
 	return err
 }
 
-func (p *Parser) GetSymbol(name string, rip uint64) (debugger.Variable, error) {
-	err := p.Parse(rip)
+//GetSymbol - takes a variable name and the current program counter and returns
+//the variable
+func (symbolicInfo *SymbolicInformation) GetSymbol(name string, rip uint64) (debugger.Variable, error) {
+	err := symbolicInfo.Parse(rip)
 	if err != nil {
 		return nil, err
 	}
-	return p.symbols.GetSymbol(rip, name)
+	return symbolicInfo.symbols.GetSymbol(rip, name)
 }
 
-func (p *Parser) IsPointer(variable debugger.Variable) bool {
+//IsPointer - takes a variable and returns whether it is a pointer  
+func (symbolicInfo *SymbolicInformation) IsPointer(variable debugger.Variable) bool {
 	v := variable.(*Variable)
 	switch v.typeVar.(type) {
 	default:
@@ -85,38 +98,44 @@ func (p *Parser) IsPointer(variable debugger.Variable) bool {
 	}
 }
 
-func (p *Parser) ParsePointer(variable debugger.Variable, bytes []byte, endianess binary.ByteOrder) (string, error) {
+//ParsePointer - takes a variable (which a pointer type) and parses the bytes of that type
+func (symbolicInfo *SymbolicInformation) ParsePointer(variable debugger.Variable, bytes []byte, endianess binary.ByteOrder) (string, error) {
 	v := variable.(*Variable)
 	switch v.typeVar.(type) {
 	default:
-		return "", errors.New("Not a pointer")
+		name := v.Name()
+		return "", fmt.Errorf("Error: %s is not a pointer", name)
 	case *Pointer:
-		p := v.typeVar.(*Pointer)
-		return p.typeOfPointer.Parse(bytes, endianess)
+		pointer := v.typeVar.(*Pointer)
+		return pointer.typeOfPointer.Parse(bytes, endianess)
 	}
 }
 
-func (p *Parser) GetPointContentSize(variable debugger.Variable) int {
-	v := variable.(*Variable)
-	k := v.typeVar.(*Pointer)
-	return k.typeOfPointer.Size()
+//GetPointContentSize - takes a pointer variable and returns the size of that type
+//(i.e. if we have int* var; then it would return 4 (assuming an int is 4 bytes))
+func (symbolicInfo *SymbolicInformation) GetPointContentSize(variable debugger.Variable) int {
+	variableOrignalStruct := variable.(*Variable)
+	pointer := variableOrignalStruct.typeVar.(*Pointer)
+	return pointer.typeOfPointer.Size()
 }
 
-func (p *Parser) SymbolManager() *SymbolManager {
-	return p.symbols
+//SymbolManager - returns the symbol manager
+func (symbolicInfo *SymbolicInformation) SymbolManager() *SymbolManager {
+	return symbolicInfo.symbols
 }
 
-func NewParser(filename string, endianess binary.ByteOrder) (*Parser, error) {
+//NewSymbolicInformation - this is the constructor for SymbolicInformation struct
+func NewSymbolicInformation(filename string, endianess binary.ByteOrder) (*SymbolicInformation, error) {
 	file, err := elf.Open(filename)
 	if err != nil {
 		return nil, err
 	}
-	d, err := file.DWARF()
+	dwarfData, err := file.DWARF()
 	if err != nil {
 		return nil, err
 	}
-	newParse := new(Parser)
-	newParse.data = d
-	newParse.endianess = endianess
-	return newParse, nil
+	symbolicInfo := new(SymbolicInformation)
+	symbolicInfo.data = dwarfData
+	symbolicInfo.endianess = endianess
+	return symbolicInfo, nil
 }

@@ -136,18 +136,18 @@ var positions = []test{
 
 func TestGetSymbol(t *testing.T) {
 	for _, test := range positions {
-		parser, err := NewParser(test.Filename, binary.LittleEndian)
+		symbolicInfo, err := NewSymbolicInformation(test.Filename, binary.LittleEndian)
 		if err != nil {
 			t.Error(err)
 		}
 		for _, pos := range test.Positions {
 			name := fmt.Sprintf("%s:0x%x", test.Filename, pos.PC)
 			t.Run(name, func(t *testing.T) {
-				err := parser.Parse(pos.PC)
+				err := symbolicInfo.Parse(pos.PC)
 				if err != nil {
 					t.Error(err)
 				}
-				sym := parser.SymbolManager()
+				sym := symbolicInfo.SymbolManager()
 				for _, expected := range pos.Variables {
 					variable, err := sym.GetSymbol(pos.PC, expected.Name())
 					if err != nil && !test.ExpectedError {

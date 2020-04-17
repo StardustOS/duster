@@ -120,6 +120,7 @@ func TestRemoveBreakpoint(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+//Checks that VM is paused before removing breakpoint
 func TestRemoveBreakpointNotPaused(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -157,6 +158,7 @@ func TestContinue(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+//Checks the continue method won't modify state if VM is not paused
 func TestContinueNotPaused(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -170,6 +172,7 @@ func TestContinueNotPaused(t *testing.T) {
 	assert.Equal(t, debugger.NotPaused, err)
 }
 
+//Tests the GetVariable can sucessfully read a variable
 func TestGetVariable(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -204,6 +207,7 @@ func TestGetVariable(t *testing.T) {
 	assert.Equal(t, val, "myvar = 50")
 }
 
+//Tests that GetVariable will make sure the VM is paused before doing anything
 func TestGetVariableNotPaused(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -259,6 +263,7 @@ func TestDereference(t *testing.T) {
 	assert.Equal(t, m, "*myvar = 0x21241")
 }
 
+//Test the Dereference will not work when the VM is running
 func TestDereferencePaused(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()

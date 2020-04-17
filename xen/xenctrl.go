@@ -247,6 +247,7 @@ func (control *Xenctrl) GetRegisters(vcpu uint32) (debugger.Registers, error) {
 	return register, nil
 }
 
+//SetRegisters - sets a register for a particular vpcu
 func (control *Xenctrl) SetRegisters(vcpu uint32, regs debugger.Registers) error {
 	r := regs.(*Register)
 	if control.key == nil {

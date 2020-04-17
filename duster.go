@@ -65,8 +65,8 @@ func main() {
 	mem.Init(cntrl)
 	filename = unzipFile(filename)
 	
-	p, err := file.NewParser(filename, binary.LittleEndian)
-	f := &file.File{Name: filename}
+	p, err := file.NewSymbolicInformation(filename, binary.LittleEndian)
+	f := &file.LineInformation{Name: filename}
 	err = f.Init()
 	if err != nil {
 		fmt.Println(err)

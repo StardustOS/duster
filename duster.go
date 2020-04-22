@@ -89,6 +89,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	if !cntrl.IsPaused() {
+		fmt.Println("Error: the VM should be paused before the debugger is run!")
+		fmt.Println("(To pause the VM on startup use the command: sudo xl create -p <vm name>")
+		os.Exit(1)
+	}
+
 	mem := &xen.Memory{Domainid: domainid, Vcpu: 0}
 	err = mem.Init(cntrl)
 	if err != nil {

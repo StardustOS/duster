@@ -24,6 +24,7 @@ type CLI struct {
 	prompt      string
 	dbg         Debugger
 	suggestions []prompt.Suggest
+	previous string 
 }
 
 func (cli *CLI) Init(debugger Debugger) {
@@ -34,7 +35,7 @@ func (cli *CLI) Init(debugger Debugger) {
 		prompt.Suggest{Text: "continue", Description: "Continue to the next breakpoint"},
 		prompt.Suggest{Text: "quit", Description: "Exit the debugger"},
 		prompt.Suggest{Text: "read", Description: "Read a variable"},
-		prompt.Suggest{Text: "def", Description: "Deference a variable"},
+		prompt.Suggest{Text: "der", Description: "Deference a variable"},
 		prompt.Suggest{Text: "remove", Description: "Remove breakpoint"},
 	}
 	cli.dbg = debugger
@@ -50,27 +51,42 @@ func (cli *CLI) ReadInput() string {
 }
 
 func (cli *CLI) ProcessInput(input string) {
+	input = strings.TrimSpace(input)
 	values := strings.Split(input, " ")
-	switch values[0] {
+	var cmd string
+	if len(values) == 0 {
+		cmd = cli.previous
+	} else {
+		cmd = values[0]
+	}
+
+	switch cmd {
 	default:
-		fmt.Printf("Error: %s is not a recognised command", values[0])
+		fmt.Printf("Error: %s is not a recognised command\n", values[0])
+		return
 	case "break":
 		if len(values) == 1 {
 			list := cli.dbg.ListBreakpoints()
 			fmt.Println(list)
 			return
 		}
-		if len(values) != 2 {
+		if len(values) < 2 {
+			fmt.Println("Error: too few arguments for break (expected argument in the form file.c:<line no>)")
+			return
+		} else if len(values) > 2 {
 			fmt.Println("Error: too many arguments for break (expected argument in the form file.c:<line no>)")
 			return
 		}
+
 		args := strings.Split(values[1], ":")
 		if len(args) != 2 {
 			fmt.Println("Error: argument in the wrong format (expected file.c:<line no>)")
+			return
 		}
 		lineNo, err := strconv.Atoi(args[1])
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("Error: %s is not an integer and cannot be used as a line number\n", args[1])
+			return
 		}
 		err = cli.dbg.SetBreakpoint(args[0], lineNo, 0)
 		if err == nil {
@@ -85,6 +101,14 @@ func (cli *CLI) ProcessInput(input string) {
 		}
 		fmt.Println(cli.dbg.GetLineInformation())
 	case "read":
+		if len(values) < 2 {
+			fmt.Println("Error: not enough arguments for read. Must supply variable name.")
+			return
+		} else if len(values) > 2 {
+			fmt.Println("Error: too many arguments for read. Must supply single variable name.")
+			return
+		}
+
 		val, err := cli.dbg.GetVariable(values[1])
 		if err != nil {
 			fmt.Println(err)
@@ -92,38 +116,53 @@ func (cli *CLI) ProcessInput(input string) {
 			fmt.Println(val)
 		}
 	
-	case "def":
+	case "der":
+		if len(values) < 2 {
+			fmt.Println("Error: not enough arguments for der. Must supply variable name.")
+			return
+		} else if len(values) > 2 {
+			fmt.Println("Error: too many arguments for der. Must supply single variable name.")
+			return
+		}
+
 		val, err := cli.dbg.Dereference(0, values[1])
 		if err != nil {
 			fmt.Println(err)
-		} else {
-			fmt.Println(val)
-		}
+			return
+		} 
+		
+		fmt.Println(val)
 		
 	case "remove":
-		if len(values) != 2 {
+		if len(values) < 2 {
+			fmt.Println("Error: remove must be passed the location of the breakpoint to be removed")
+			return
+		} else if len(values) > 2 {
 			fmt.Println("Error: too many arguments for break (expected argument in the form file.c:<line no>)")
 			return
 		}
+		
 		args := strings.Split(values[1], ":")
 		if len(args) != 2 {
 			fmt.Println("Error: argument in the wrong format (expected file.c:<line no>)")
+			return
 		}
 
 		lineNo, err := strconv.Atoi(args[1])
 		if err != nil {
-			fmt.Println(err)
+			fmt.Printf("Error: %s is not an integer and cannot be used as a line number\n", args[1])
+			return
 		}
 
 		err = cli.dbg.RemoveBreakpoint(args[0], lineNo, 0)
 		if err != nil {
 			fmt.Println(err)
-		} else {
-			fmt.Printf("Removed breakpoint at %s:%d\n", args[0], lineNo)
-		}
-
+			return
+		} 
+		fmt.Printf("Removed breakpoint at %s:%d\n", args[0], lineNo)
 		
 	case "quit":
+		fmt.Println("Hasta luego")
 		os.Exit(0)
 	case "continue":
 		err := cli.dbg.Continue(0)
@@ -131,4 +170,5 @@ func (cli *CLI) ProcessInput(input string) {
 			fmt.Println(err)
 		}
 	}
+	cli.previous = input
 }

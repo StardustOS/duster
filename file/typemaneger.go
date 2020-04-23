@@ -385,7 +385,7 @@ type BaseType struct {
 //Parse returns a human readable string of the bytes interpreted as that type
 func (t *BaseType) Parse(bytes []byte, endianess binary.ByteOrder) (string, error) {
 	if len(bytes) != t.size {
-		return "", fmt.Errorf("Error: type %s expects %d bytes but got %d", t.Name, t.Size, len(bytes))
+		return "", fmt.Errorf("Error: type %s expects %d bytes but got %d", t.Name, t.Size(), len(bytes))
 	}
 	var output string
 	switch t.Encoding {

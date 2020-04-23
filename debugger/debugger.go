@@ -183,6 +183,7 @@ func NewDebugger(memory MemoryAccess, controller Control, lineInfo LineInformati
 }
 
 func (debugger *Debugger) singleStep(vcpu uint32, start bool) error {
+
 	registers, err := debugger.registers.GetRegisters(vcpu)
 	if err != nil {
 		return err
@@ -259,12 +260,12 @@ func (debugger *Debugger) Step(vcpu uint32) error {
 
 		//Check whether a breakpoint exists here (if we've went through one
 		//we need to fix the instruction that we've broken at before moving on).
-		if debugger.breakpointManager.AddressIsBreakpoint(rip) {
+		if debugger.breakpointManager.AddressIsBreakpoint(rip-1) {
 
 			//We need to restore the instruction to its original state before 
 			//the breakpoint was inserted because the instruction we over wrote 
 			//may modify some state of the VM.
-			err = debugger.breakpointManager.RestoreInstruction(rip)
+			err = debugger.breakpointManager.RestoreInstruction(rip-1)
 			if err != nil {
 				return err
 			}
@@ -272,21 +273,30 @@ func (debugger *Debugger) Step(vcpu uint32) error {
 			//We want to rollback to run the instruction that was over written with
 			//the breakpoint 
 			rip -= 1
-			registers.SetRegister("rip", rip)
-			debugger.registers.SetRegisters(vcpu, registers)
+			err := registers.SetRegister("rip", rip)
+			if err != nil {
+				return err
+			}
+
+			err = debugger.registers.SetRegisters(vcpu, registers)
+			if err != nil {
+				return err 
+			}
+		} else {
+			err = debugger.breakpointManager.RestoreBreakpoint()
+			if err != nil {
+				return err
+			}
 		}
 
-		err = debugger.breakpointManager.RestoreBreakpoint()
-		if err != nil {
-			return err
-		}
 
 		err = debugger.controller.Unpause()
 		if err != nil {
 			return err
 		}
 	}
-	return nil
+	err = debugger.breakpointManager.RestoreBreakpoint()
+	return err
 }
 
 //Helper function for reading the contents of variables from memory
@@ -395,10 +405,65 @@ func (debugger *Debugger) Continue(vcpu uint32) error {
 		return NotPaused
 	}
 
-	//Makes sure we don't break on each new instruction
-	debugger.singleStep(vcpu, false)
+	registers, err := debugger.registers.GetRegisters(vcpu)
+	if err != nil {
+		return err 
+	}
 
-	err := debugger.controller.Unpause()
+	rip, err := registers.GetRegister("rip")
+	if err != nil {
+		return err 
+	}
+
+	//If we've been paused because breakpoint we need to carefully
+	//restore the instruction we broke
+	if debugger.breakpointManager.AddressIsBreakpoint(rip-1) {
+
+		//Rollback to the start of the instruction we broke 
+		rip -= 1
+		err = debugger.breakpointManager.RestoreInstruction(rip)
+		if err != nil {
+			return err
+		}
+		err = registers.SetRegister("rip", rip)
+		if err != nil {
+			return err 
+		}
+		err := debugger.registers.SetRegisters(vcpu, registers)
+		if err != nil {
+			return err
+		}
+
+		//We put the machine into single step mode because 
+		//we just want to execute the instruction we restored
+		//and then put the breakpoint back there
+		err = debugger.singleStep(vcpu, true)
+		if err != nil {
+			return err 
+		}
+
+		err = debugger.controller.Unpause()
+		if err != nil {
+			return err
+		}
+
+		for !debugger.controller.IsPaused() {}
+		
+		err = debugger.breakpointManager.RestoreBreakpoint()
+		registers, err = debugger.registers.GetRegisters(vcpu)
+		if err != nil {
+			return err 
+		}
+	}
+
+
+	//Makes sure we don't break on each new instruction
+	err = debugger.singleStep(vcpu, false)
+	if err != nil {
+		return err
+	}
+
+	err = debugger.controller.Unpause()
 	if err != nil {
 		return err
 	}
@@ -406,6 +471,22 @@ func (debugger *Debugger) Continue(vcpu uint32) error {
 	//Busy wait until we hit the next breakpoint
 	for !debugger.controller.IsPaused() {
 	}
+
+
+	registers, err = debugger.registers.GetRegisters(vcpu)
+	if err != nil {
+		return err 
+	}
+
+	rip, err = registers.GetRegister("rip")
+	if err != nil {
+		return err 
+	}
+
+	//Bit of hack, just update where we are in the executable so
+	//we can display it to the end user
+	debugger.lineInfo.IsNewLine(rip)
+
 	return nil
 }
 
@@ -432,9 +513,38 @@ func (debugger *Debugger) RemoveBreakpoint(filename string, line int, vcpu uint3
 	if !debugger.controller.IsPaused() {
 		return NotPaused
 	}
+
 	address := debugger.lineInfo.Address(filename, line)
-	err := debugger.breakpointManager.Remove(address)
-	return err
+
+	registers, err := debugger.registers.GetRegisters(vcpu)
+	if err != nil {
+		return err 
+	}
+
+	rip, err := registers.GetRegister("rip")
+	if err != nil {
+		return err 
+	}
+
+	wasBreakpoint := debugger.breakpointManager.AddressIsBreakpoint(rip-1) 
+
+	err = debugger.breakpointManager.Remove(address)
+	
+	//Just make sure we execute the instruction that was overwritten by
+	//the breakpoint
+	if wasBreakpoint {
+		rip -= 1
+		err = registers.SetRegister("rip", rip)
+		if err != nil {
+			return err
+		}
+		err = debugger.registers.SetRegisters(vcpu, registers)
+		if err != nil {
+			return err
+		} 
+	}
+
+	return nil
 }
 
 //ListBreakpoints - returns a formatted list of the breakpoints that have been set

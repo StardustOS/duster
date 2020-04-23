@@ -11,9 +11,13 @@ type info struct {
 }
 
 func (i *info) addLineInformation(entry *dwarf.LineEntry) {
+	if !entry.IsStmt {
+		return 
+	}
 	if i.lineToAddressInfo == nil {
 		i.lineToAddressInfo = make(map[int][]uint64)
-	}
+	} 
+	
 	list, _ := i.lineToAddressInfo[entry.Line]
 	i.lineToAddressInfo[entry.Line] = append(list, entry.Address)
 }
@@ -130,6 +134,6 @@ func (lineInfo *LineInformation) IsNewLine(rip uint64) (changed bool) {
 		}
 		lineInfo.currentLine = lineEntry.Line
 		lineInfo.currentFile = lineEntry.File.Name
-	}
+	} 
 	return
 }

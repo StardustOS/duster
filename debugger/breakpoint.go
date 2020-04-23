@@ -104,7 +104,8 @@ func (point *Breakpoints) RestoreBreakpoint() error {
 		if err != nil {
 			return err
 		}
-	}
+	} 
+	point.restoreBreakpoints = nil
 	return nil
 }
 

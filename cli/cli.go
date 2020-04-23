@@ -54,7 +54,7 @@ func (cli *CLI) ProcessInput(input string) {
 	input = strings.TrimSpace(input)
 	values := strings.Split(input, " ")
 	var cmd string
-	if len(values) == 0 {
+	if len(input) == 0 {
 		cmd = cli.previous
 	} else {
 		cmd = values[0]
@@ -168,7 +168,11 @@ func (cli *CLI) ProcessInput(input string) {
 		err := cli.dbg.Continue(0)
 		if err != nil {
 			fmt.Println(err)
+			return 
 		}
+		fmt.Println(cli.dbg.GetLineInformation())
 	}
-	cli.previous = input
+	if len(input) > 0 {
+		cli.previous = input
+	}
 }

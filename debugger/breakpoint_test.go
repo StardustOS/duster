@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/AtomicMalloc/debugger/debugger"
-	mocks "github.com/AtomicMalloc/debugger/mock_debugger"
+	"github.com/StardustOS/debugger/debugger"
+	mocks "github.com/StardustOS/debugger/mock_debugger"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )

@@ -10,10 +10,10 @@ import (
 	"os/user"
 	"strings"
 
-	"github.com/StardustOS/debugger/cli"
-	"github.com/StardustOS/debugger/debugger"
-	"github.com/StardustOS/debugger/file"
-	"github.com/StardustOS/debugger/xen"
+	"github.com/StardustOS/duster/cli"
+	"github.com/StardustOS/duster/debugger"
+	"github.com/StardustOS/duster/file"
+	"github.com/StardustOS/duster/xen"
 )
 
 func unzipFile(filename string) string {

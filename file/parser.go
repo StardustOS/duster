@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/StardustOS/debugger/debugger"
+	"github.com/StardustOS/duster/debugger"
 )
 
 //SymbolicInformation represents the type and variables 

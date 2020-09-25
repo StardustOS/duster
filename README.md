@@ -31,6 +31,39 @@ The commands supported by Duster are:
 4. read [variable name]- reads a variable (this should be compatible with C type. However, there slight issue with arrays of the form c[variable] which causes it crash).
 5. quit - quits the debugger.
 6. step - steps to the next source line
-7. def [variable] - deferences a pointer (only works with variable not attribute, unfortunately)
+7. der [variable] - deferences a pointer (only works with variable not attributes, unfortunately)
 
- 
+## Demo 
+The the following demo should help to clarify the above section. Assume the following code is being debugged after the initial startup.
+### Code 
+```
+void demo() {
+        struct test my_test;
+        my_test.val = 10;
+        my_test.my_pointer = NULL;
+        my_test.no = 0.5;
+        for (int i = 0; i < 3; i++) {
+                printf("We are on the %d iteration of the loop\n", i);
+                my_test.val += 100;
+                my_test.no += 0.5;      
+        }
+        struct test *pointer_tester;
+        pointer_tester = malloc(sizeof(struct test));
+        pointer_tester->val = 20;
+        pointer_tester->no = 0.110;
+        pointer_tester->my_pointer = NULL;
+        printf("%d\n", pointer_tester->val);
+        printk("We're done\n");
+}     
+```
+### Duster running
+![Demo](images/Screencast-from-25-09-20-19_15_40.gif)
+
+## Current Limitations
+Unfortunately Duster is not prefect! The following details the issues you may have with Duster. These will be fixed eventually. If you find or think of anything else please put it in an issue and it will be looked at. 
+* Currently, you cannot print off arrays whose length is defined by a variable
+* No C++ (or any other language) support 
+* When you quit you need to reset the domain. Duster does not clean up after itself!
+* You cannot view contents of pointer type attributes 
+* The step command will just step into a function. If you want to step over a function you must set a breakpoint after it
+* You need to run the quit command, depending on your OS ctrl-C won't always work

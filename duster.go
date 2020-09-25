@@ -10,10 +10,10 @@ import (
 	"os/user"
 	"strings"
 
-	"github.com/AtomicMalloc/debugger/cli"
-	"github.com/AtomicMalloc/debugger/debugger"
-	"github.com/AtomicMalloc/debugger/file"
-	"github.com/AtomicMalloc/debugger/xen"
+	"github.com/StardustOS/debugger/cli"
+	"github.com/StardustOS/debugger/debugger"
+	"github.com/StardustOS/debugger/file"
+	"github.com/StardustOS/debugger/xen"
 )
 
 func unzipFile(filename string) string {

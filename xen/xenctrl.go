@@ -1,7 +1,7 @@
 package xen
 
 import (
-	"github.com/AtomicMalloc/debugger/debugger"
+	"github.com/StardustOS/debugger/debugger"
 )
 
 /*

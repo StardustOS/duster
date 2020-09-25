@@ -2,7 +2,6 @@ package file
 
 import (
 	"encoding/binary"
-	"fmt"
 )
 
 type Variable struct {
@@ -16,7 +15,6 @@ func (variable *Variable) Parse(bytes []byte, endianess binary.ByteOrder) (strin
 }
 
 func (variable *Variable) Size() int {
-	fmt.Println(variable.typeVar)
 	return variable.typeVar.Size()
 }
 

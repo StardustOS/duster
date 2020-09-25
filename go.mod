@@ -1,4 +1,4 @@
-module github.com/AtomicMalloc/debugger
+module github.com/StardustOS/debugger
 
 go 1.13
 

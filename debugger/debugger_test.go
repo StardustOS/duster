@@ -4,8 +4,8 @@ import (
 	"testing"
 	"encoding/binary"
 
-	"github.com/StardustOS/debugger/debugger"
-	mocks "github.com/StardustOS/debugger/mock_debugger"
+	"github.com/StardustOS/duster/debugger"
+	mocks "github.com/StardustOS/duster/mock_debugger"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/go-delve/delve/pkg/dwarf/op"

@@ -1,7 +1,7 @@
 package xen
 
 import (
-	"github.com/StardustOS/debugger/debugger"
+	"github.com/StardustOS/duster/debugger"
 )
 
 /*

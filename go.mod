@@ -1,4 +1,4 @@
-module github.com/StardustOS/debugger
+module github.com/StardustOS/duster
 
 go 1.13
 
